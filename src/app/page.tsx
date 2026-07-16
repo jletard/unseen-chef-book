@@ -1,35 +1,34 @@
 // src/app/page.tsx
+// Cookbook landing page.
+// Redirects unauthenticated users to the login page.
 
-import { supabase } from "@/lib/supabase";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function Home() {
-  const { data, error } = await supabase
-    .from("menu_items_v2")
-    .select("id, name")
-    .order("name")
-    .limit(10);
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
 
   return (
     <main className="min-h-screen p-8">
-      <h1 className="text-4xl font-bold">Unseen Chef Cookbook</h1>
+      <h1 className="text-4xl font-bold">
+        Unseen Chef Cookbook
+      </h1>
 
-      {error ? (
-        <p className="mt-4 text-red-400">
-          Failed to load menu items: {error.message}
-        </p>
-      ) : (
-        <>
-          <p className="mt-4 text-zinc-400">
-            Connected to Supabase. Found {data.length} menu items.
-          </p>
+      <p className="mt-4 text-zinc-400">
+        Welcome, {user.email}
+      </p>
 
-          <ul className="mt-6 space-y-1">
-            {data.map((item) => (
-              <li key={item.id}>{item.name}</li>
-            ))}
-          </ul>
-        </>
-      )}
+      <p className="mt-8 text-zinc-500">
+        The production system behind The Unseen Chef.
+      </p>
     </main>
   );
 }
