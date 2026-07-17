@@ -9,11 +9,36 @@
 - [x] Connect local project to GitHub
 - [x] Install Supabase client
 - [x] Connect to the existing Supabase project
-- [ ] Add authentication
-- [ ] Create dark-mode-only application shell
-- [ ] Add base responsive layout
-- [ ] Add base print stylesheet
-- [ ] Confirm the app can read existing `menu_items`
+- [x] Add authentication
+- [x] Create dark-mode-only application shell
+- [x] Add base responsive layout
+- [x] Add base print stylesheet
+- [x] Confirm the app can read existing `menu_items_v2`
+
+## Phase 1.5 — Application Navigation
+
+- [x] Add top-level tabs
+- [x] Decide final tab names and order
+- [x] Highlight the active tab
+- [x] Keep the selected production week across pages
+- [x] Make the header work cleanly on mobile
+- [x] Create placeholder pages for each top-level area
+- [ ] Confirm the shell prints without header, footer, or navigation
+
+### Navigation Structure
+
+- Planning
+  - Menu Items
+  - Recipes
+  - Components
+  - Ingredients
+- Production
+  - Shopping List
+  - Prep List
+  - Production List
+- Cook
+  - This Week
+  - Recipe Search
 
 ## Phase 2 — Core Data
 
@@ -62,7 +87,7 @@
 
 ## Phase 6 — Production Week
 
-- [ ] Select production week
+- [x] Select production week
 - [ ] Read food totals from existing order data
 - [ ] Exclude customer names and customer information
 - [ ] Match production items to recipes
@@ -111,3 +136,4 @@
 - [ ] Nutrition information
 - [ ] Inventory
 - [ ] Production completion tracking
+- [ ] Implement Sign Out if multiple users or shared devices make it necessary
