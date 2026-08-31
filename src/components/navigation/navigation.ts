@@ -16,6 +16,7 @@ export const navigationSections: NavigationSection[] = [
     children: [
       { label: "Menu Items", href: "/planning/menu-items" },
       { label: "Reconciliation", href: "/planning/reconciliation" },
+      { label: "Data Repair", href: "/planning/data-repair" },
       { label: "Main Dishes", href: "/planning/main-dishes" },
       { label: "Components", href: "/planning/components" },
       { label: "Sides", href: "/planning/sides" },
