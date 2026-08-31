@@ -1,23 +1,19 @@
-// src/app/(protected)/planning/protein-types/page.tsx
-//
-// Planning > Protein Types
-//
-// Master list of protein types used throughout the Cookbook.
-//
-// Protein Types are assigned to Main Dishes and Menu Items to support
-// organization, filtering, searching, and menu planning. This list changes
-// infrequently but serves as shared reference data throughout the Cookbook.
+import ReferenceCatalog from "@/components/planning/ReferenceCatalog";
+import { getReferenceRecords } from "@/lib/cookbook-data";
 
-export default function ProteinTypesPage() {
+export default async function ProteinTypesPage() {
+  const proteinTypes = await getReferenceRecords("protein_types");
+
   return (
     <>
       <h1 className="text-2xl font-bold">Protein Types</h1>
-
       <p className="mt-2 text-sm text-zinc-400">
-        Manage the master list of protein types used throughout the
-        Cookbook. Protein types help organize recipes and menu items and
-        provide consistent filtering across the application.
+        Read-only protein-type list shared with Admin and the ordering system.
       </p>
+      <ReferenceCatalog
+        records={proteinTypes}
+        emptyMessage="No protein types are currently defined."
+      />
     </>
   );
 }

@@ -1,23 +1,19 @@
-// src/app/(protected)/planning/categories/page.tsx
-//
-// Planning > Categories
-//
-// Master list of cuisine and style categories used throughout the Cookbook.
-//
-// Categories organize Main Dishes and Menu Items, making it easier to browse,
-// search, filter, and plan menus. Categories can be created, renamed,
-// merged, archived, and reordered as the Cookbook evolves.
+import ReferenceCatalog from "@/components/planning/ReferenceCatalog";
+import { getReferenceRecords } from "@/lib/cookbook-data";
 
-export default function CategoriesPage() {
+export default async function CategoriesPage() {
+  const categories = await getReferenceRecords("categories");
+
   return (
     <>
       <h1 className="text-2xl font-bold">Categories</h1>
-
       <p className="mt-2 text-sm text-zinc-400">
-        Manage the master list of cuisine and style categories used
-        throughout the Cookbook. Categories help organize recipes and menu
-        items and can be updated as your menu continues to evolve.
+        Read-only category list shared with Admin and the ordering system.
       </p>
+      <ReferenceCatalog
+        records={categories}
+        emptyMessage="No categories are currently defined."
+      />
     </>
   );
 }

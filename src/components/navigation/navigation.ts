@@ -1,6 +1,3 @@
-// src/components/navigation/navigation.ts
-// Navigation structure for the cookbook workflows.
-
 export type NavigationItem = {
   label: string;
   href: string;
@@ -17,53 +14,24 @@ export const navigationSections: NavigationSection[] = [
     href: "/planning/menu-items",
     matchPath: "/planning",
     children: [
-      {
-        label: "Menu Items",
-        href: "/planning/menu-items",
-      },
-      {
-        label: "Main Dishes",
-        href: "/planning/main-dishes",
-      },
-      {
-        label: "Components",
-        href: "/planning/components",
-      },
-      {
-        label: "Sides",
-        href: "/planning/sides",
-      },
-      {
-        label: "Ingredients",
-        href: "/planning/ingredients",
-      },
-      {
-        label: "Categories",
-        href: "/planning/categories",
-      },
-      {
-        label: "Protein Types",
-        href: "/planning/protein-types",
-      },
+      { label: "Menu Items", href: "/planning/menu-items" },
+      { label: "Reconciliation", href: "/planning/reconciliation" },
+      { label: "Main Dishes", href: "/planning/main-dishes" },
+      { label: "Components", href: "/planning/components" },
+      { label: "Sides", href: "/planning/sides" },
+      { label: "Ingredients", href: "/planning/ingredients" },
+      { label: "Categories", href: "/planning/categories" },
+      { label: "Protein Types", href: "/planning/protein-types" },
     ],
   },
   {
     label: "Production",
-    href: "/production/shopping",
+    href: "/production/list",
     matchPath: "/production",
     children: [
-      {
-        label: "Production List",
-        href: "/production/list",
-      },
-      {
-        label: "Shopping List",
-        href: "/production/shopping",
-      },
-      {
-        label: "Prep List",
-        href: "/production/prep",
-      },
+      { label: "Production List", href: "/production/list" },
+      { label: "Shopping List", href: "/production/shopping" },
+      { label: "Prep List", href: "/production/prep" },
     ],
   },
   {
@@ -71,14 +39,8 @@ export const navigationSections: NavigationSection[] = [
     href: "/cook/this-week",
     matchPath: "/cook",
     children: [
-      {
-        label: "This Week",
-        href: "/cook/this-week",
-      },
-      {
-        label: "Recipe Search",
-        href: "/cook/search",
-      },
+      { label: "This Week", href: "/cook/this-week" },
+      { label: "Recipe Search", href: "/cook/search" },
     ],
   },
 ];
