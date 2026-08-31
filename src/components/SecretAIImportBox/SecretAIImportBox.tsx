@@ -191,7 +191,9 @@ export type SecretAIFormSchema = {
 type SecretAIImportBoxProps = {
     formSchema: SecretAIFormSchema;
     currentValues: Record<string, unknown>;
-    onImport: (values: Record<string, unknown>) => void;
+    onImport: (values: Record<string, unknown>) => void | Promise<void>;
+    successMessage?: string;
+    closeAfterImport?: boolean;
     disabled?: boolean;
 };
 
@@ -503,6 +505,8 @@ export default function SecretAIImportBox({
     formSchema,
     currentValues,
     onImport,
+    successMessage = "Import successful.",
+    closeAfterImport = false,
     disabled = false,
 }: SecretAIImportBoxProps) {
     const [isOpen, setIsOpen] = useState(false);
@@ -527,7 +531,7 @@ export default function SecretAIImportBox({
         }
     }
 
-    function handleImport() {
+    async function handleImport() {
         try {
             const parsed = JSON.parse(jsonText) as unknown;
 
@@ -536,13 +540,14 @@ export default function SecretAIImportBox({
                 formSchema,
             );
 
-            onImport(validated);
+            await onImport(validated);
 
             setHasError(false);
-            setMessage(
-                "Import successful. Review the form before saving.",
-            );
+            setMessage(successMessage);
             setJsonText("");
+            if (closeAfterImport) {
+                setIsOpen(false);
+            }
         } catch {
             setHasError(true);
 

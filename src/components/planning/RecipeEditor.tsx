@@ -173,7 +173,6 @@ export default function RecipeEditor({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [importedRecipe, setImportedRecipe] = useState<ImportedRecipe | null>(null);
 
   const components = recipes.filter(
     (candidate) =>
@@ -342,23 +341,16 @@ export default function RecipeEditor({
   }
 
 
-  function acceptAIImport(values: Record<string, unknown>) {
-    const imported = values as unknown as ImportedRecipe;
-    setName(imported.name ?? name);
-    setRecipeType(imported.recipe_type ?? recipeType);
-    setYieldKind(imported.yield_kind ?? yieldKind);
-    setBaseYield(imported.base_yield?.toString() ?? baseYield);
-    setYieldUnit(imported.yield_unit ?? yieldUnit);
-    setMinimumBatch(imported.minimum_batch?.toString() ?? minimumBatch);
-    setNotes(imported.notes ?? notes);
-    setImportedRecipe(imported);
-    setMessage("AI recipe loaded for review. Nothing has been saved yet.");
-    setError("");
-  }
-
-  async function applyAIImport() {
-    if (!importedRecipe) return;
-    if (!window.confirm("Replace this recipe's current items and steps with the reviewed AI import?")) return;
+  async function acceptAIImport(values: Record<string, unknown>) {
+    const importedRecipe = values as unknown as ImportedRecipe;
+    setName(importedRecipe.name);
+    setRecipeType(importedRecipe.recipe_type);
+    setStatus("draft");
+    setYieldKind(importedRecipe.yield_kind);
+    setBaseYield(importedRecipe.base_yield.toString());
+    setYieldUnit(importedRecipe.yield_unit);
+    setMinimumBatch(importedRecipe.minimum_batch.toString());
+    setNotes(importedRecipe.notes ?? "");
     begin();
     try {
       await readResponse(
@@ -450,8 +442,7 @@ export default function RecipeEditor({
       }
 
       setStatus("draft");
-      setImportedRecipe(null);
-      setMessage("AI recipe applied as a draft. Review it, then mark it complete when ready.");
+      setMessage("Recipe imported and saved as a draft.");
       router.refresh();
       finish();
     } catch (importError) {
@@ -509,28 +500,12 @@ export default function RecipeEditor({
                 steps: steps.map((step) => ({ instruction: step.instruction })),
               }}
               onImport={acceptAIImport}
+              successMessage="Recipe imported and saved."
+              closeAfterImport
               disabled={busy}
             />
           </div>
         </div>
-
-        {importedRecipe ? (
-          <div className="mt-4 border border-blue-800 bg-blue-950/20 p-4">
-            <p className="font-semibold">Imported draft ready to review</p>
-            <p className="mt-1 text-sm text-zinc-300">
-              {importedRecipe.items?.length ?? 0} ingredients/components · {importedRecipe.steps?.length ?? 0} steps.
-              The fields below have been populated, but the recipe has not been changed in Supabase.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-3">
-              <button type="button" disabled={busy} onClick={applyAIImport} className="border border-blue-500 px-4 py-2 disabled:opacity-40">
-                Apply Imported Recipe
-              </button>
-              <button type="button" disabled={busy} onClick={() => setImportedRecipe(null)} className="border border-zinc-600 px-4 py-2 disabled:opacity-40">
-                Discard Import
-              </button>
-            </div>
-          </div>
-        ) : null}
 
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="text-sm md:col-span-2">
