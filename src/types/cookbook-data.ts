@@ -18,6 +18,34 @@ export type ReferenceRecord = {
   sortOrder: number;
 };
 
+export type IngredientRecord = {
+  id: string;
+  name: string;
+  measurementKind: "liquid" | "solid" | "countable";
+  active: boolean;
+  notes: string | null;
+};
+
+export type RecipeRecord = {
+  id: string;
+  name: string;
+  recipeType: string;
+  status: "draft" | "complete" | "inactive";
+  yieldKind: string | null;
+  baseYield: number | null;
+  yieldUnit: string | null;
+  minimumBatch: number | null;
+  notes: string | null;
+};
+
+export type MenuItemRecipeLink = {
+  id: string;
+  menuItemId: string;
+  recipeId: string;
+  role: "main" | "component" | "garnish";
+  sortOrder: number;
+};
+
 export type SideRequirement = {
   name: string;
   quantity: number;
