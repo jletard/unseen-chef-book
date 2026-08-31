@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import type {
@@ -161,12 +162,24 @@ export default function MenuItemCatalog({
                     {item.sides.length ? item.sides.join(" · ") : "—"}
                   </td>
                   <td className="px-3 py-2">
-                    {itemLinks.length
-                      ? itemLinks
-                          .map((link) => recipesById.get(link.recipeId)?.name)
-                          .filter(Boolean)
-                          .join(" · ")
-                      : "Not defined"}
+                    {itemLinks.length ? (
+                      <span className="flex flex-wrap gap-x-2 gap-y-1">
+                        {itemLinks.map((link) => {
+                          const linkedRecipe = recipesById.get(link.recipeId);
+                          return linkedRecipe ? (
+                            <Link
+                              key={link.id}
+                              href={"/planning/recipes/" + linkedRecipe.id}
+                              className="text-blue-300 hover:underline"
+                            >
+                              {linkedRecipe.name}
+                            </Link>
+                          ) : null;
+                        })}
+                      </span>
+                    ) : (
+                      "Not defined"
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <button

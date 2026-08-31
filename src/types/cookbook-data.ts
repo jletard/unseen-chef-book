@@ -77,3 +77,23 @@ export type ProductionSummary = {
   items: ProductionItem[];
   bulkItems: BulkProductionItem[];
 };
+
+export type RecipeItemRecord = {
+  id: string;
+  recipeId: string;
+  itemType: "ingredient" | "component";
+  ingredientId: string | null;
+  componentRecipeId: string | null;
+  quantity: number;
+  unit: string;
+  preparationNote: string | null;
+  sortOrder: number;
+  displayName: string;
+};
+
+export type RecipeStepRecord = {
+  id: string;
+  recipeId: string;
+  stepNumber: number;
+  instruction: string;
+};

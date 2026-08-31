@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import type { RecipeRecord } from "@/types/cookbook-data";
@@ -83,7 +84,12 @@ export default function RecipeCatalog({
               key={recipe.id}
               className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 last:border-b-0"
             >
-              <span>{recipe.name}</span>
+              <Link
+                href={"/planning/recipes/" + recipe.id}
+                className="text-blue-300 hover:underline"
+              >
+                {recipe.name}
+              </Link>
               <span
                 className={
                   recipe.status === "complete"

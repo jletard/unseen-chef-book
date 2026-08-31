@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import MenuItemCatalog from "@/components/planning/MenuItemCatalog";
 import { getMenuItems } from "@/lib/cookbook-data";
 import {
@@ -63,7 +65,12 @@ export default async function ReconciliationPage() {
           <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {incompleteRecipes.map((recipe) => (
               <div key={recipe.id} className="border border-zinc-800 p-3">
-                <div className="font-medium">{recipe.name}</div>
+                <Link
+                  href={"/planning/recipes/" + recipe.id}
+                  className="font-medium text-blue-300 hover:underline"
+                >
+                  {recipe.name}
+                </Link>
                 <div className="mt-1 text-xs capitalize text-amber-300">
                   Draft {recipe.recipeType}
                 </div>
