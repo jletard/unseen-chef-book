@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import SecretAIImportBox, { type SecretAIFormSchema } from "@/components/SecretAIImportBox/SecretAIImportBox";
@@ -584,6 +585,14 @@ export default function RecipeEditor({
               <span className="w-20 text-right">{item.quantity} {unitLabels[item.unit] ?? item.unit}</span>
               <span className="flex-1">{item.displayName}{item.preparationNote ? <span className="ml-2 text-zinc-400">— {item.preparationNote}</span> : null}</span>
               <span className="text-xs capitalize text-zinc-500">{item.itemType}</span>
+              {item.itemType === "component" && item.componentRecipeId ? (
+                <Link
+                  href={"/planning/recipes/" + item.componentRecipeId}
+                  className="border border-blue-700 px-2 py-1 text-blue-300"
+                >
+                  Edit
+                </Link>
+              ) : null}
               <button type="button" onClick={() => remove("/api/recipe-items/" + item.id)} className="border border-red-800 px-2 py-1 text-red-300">Remove</button>
             </div>
           ))}
