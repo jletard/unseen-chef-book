@@ -182,17 +182,28 @@ export default function DataRepairTool({ menuItems, records }: Props) {
         throw new Error(result.error || "The merge failed.");
       }
 
+      const changedCount = result.changedMenuItems?.length ?? 0;
+
       setMessage(
-        "Merged " +
-          result.mergedCount +
-          ' duplicate' +
-          (result.mergedCount === 1 ? "" : "s") +
-          ' into "' +
-          result.canonicalName +
-          '". Updated ' +
-          (result.changedMenuItems?.length ?? 0) +
-          " current menu item" +
-          ((result.changedMenuItems?.length ?? 0) === 1 ? "." : "s."),
+        usingRemove
+          ? "Removed " +
+              result.mergedCount +
+              " side record" +
+              (result.mergedCount === 1 ? "" : "s") +
+              ". Updated " +
+              changedCount +
+              " current menu item" +
+              (changedCount === 1 ? "." : "s.")
+          : "Merged " +
+              result.mergedCount +
+              " duplicate" +
+              (result.mergedCount === 1 ? "" : "s") +
+              ' into "' +
+              result.canonicalName +
+              '". Updated ' +
+              changedCount +
+              " current menu item" +
+              (changedCount === 1 ? "." : "s."),
       );
       setQuery("");
       setSelectedIds([]);
