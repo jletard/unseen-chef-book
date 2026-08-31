@@ -31,7 +31,6 @@ export default function MenuItemCatalog({
   const [newType, setNewType] = useState<"main" | "component">("main");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const activeCount = items.filter((item) => item.active).length;
   const recipesById = new Map(recipes.map((recipe) => [recipe.id, recipe]));
 
   function open(item: MenuItemRecord) {
@@ -119,10 +118,8 @@ export default function MenuItemCatalog({
 
   return (
     <div className="mt-6">
-      <div className="mb-3 flex flex-wrap gap-3 text-sm text-zinc-400">
-        <span>{items.length} catalog items</span>
-        <span>{activeCount} active</span>
-        <span>{items.length - activeCount} inactive</span>
+      <div className="mb-3 text-sm text-zinc-400">
+        {items.length} catalog item{items.length === 1 ? "" : "s"}
       </div>
 
       <div className="overflow-x-auto border border-zinc-800">
@@ -147,10 +144,7 @@ export default function MenuItemCatalog({
               return [
                 <tr
                   key={item.id}
-                  className={
-                    "border-t border-zinc-800 " +
-                    (item.active ? "" : "text-zinc-500")
-                  }
+                  className="border-t border-zinc-800"
                 >
                   <td className="max-w-md px-3 py-2">
                     <div className="font-medium text-zinc-100">
