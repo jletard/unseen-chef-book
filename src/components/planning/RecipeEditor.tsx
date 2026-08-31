@@ -479,36 +479,41 @@ export default function RecipeEditor({
     <div className="mt-6 space-y-6">
 
       <section className="border border-zinc-700 bg-zinc-950 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">Secret AI+ Recipe Assistant</h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              Ask AI for a complete draft, paste the JSON response here, review it, then apply it.
-            </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="text-lg font-semibold">Recipe definition</h2>
+          <div className="ml-auto flex max-w-full flex-wrap items-start justify-end gap-3">
+            <span
+              className={
+                status === "complete" ? "pt-1 text-emerald-400" : "pt-1 text-amber-300"
+              }
+            >
+              {status === "complete" ? "Complete" : "Draft"}
+            </span>
+            <SecretAIImportBox
+              formSchema={recipeImportSchema}
+              currentValues={{
+                name,
+                recipe_type: recipeType,
+                yield_kind: yieldKind,
+                base_yield: baseYield ? Number(baseYield) : null,
+                yield_unit: yieldUnit,
+                minimum_batch: minimumBatch ? Number(minimumBatch) : null,
+                notes,
+                items: items.map((item) => ({
+                  name: item.displayName,
+                  item_type: item.itemType,
+                  quantity: item.quantity,
+                  unit: item.unit,
+                  preparation_note: item.preparationNote ?? "",
+                })),
+                steps: steps.map((step) => ({ instruction: step.instruction })),
+              }}
+              onImport={acceptAIImport}
+              disabled={busy}
+            />
           </div>
-          <SecretAIImportBox
-            formSchema={recipeImportSchema}
-            currentValues={{
-              name,
-              recipe_type: recipeType,
-              yield_kind: yieldKind,
-              base_yield: baseYield ? Number(baseYield) : null,
-              yield_unit: yieldUnit,
-              minimum_batch: minimumBatch ? Number(minimumBatch) : null,
-              notes,
-              items: items.map((item) => ({
-                name: item.displayName,
-                item_type: item.itemType,
-                quantity: item.quantity,
-                unit: item.unit,
-                preparation_note: item.preparationNote ?? "",
-              })),
-              steps: steps.map((step) => ({ instruction: step.instruction })),
-            }}
-            onImport={acceptAIImport}
-            disabled={busy}
-          />
         </div>
+
         {importedRecipe ? (
           <div className="mt-4 border border-blue-800 bg-blue-950/20 p-4">
             <p className="font-semibold">Imported draft ready to review</p>
@@ -526,19 +531,6 @@ export default function RecipeEditor({
             </div>
           </div>
         ) : null}
-      </section>
-
-      <section className="border border-zinc-700 bg-zinc-950 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Recipe definition</h2>
-          <span
-            className={
-              status === "complete" ? "text-emerald-400" : "text-amber-300"
-            }
-          >
-            {status === "complete" ? "Complete" : "Draft"}
-          </span>
-        </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="text-sm md:col-span-2">
