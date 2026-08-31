@@ -174,6 +174,11 @@ export default function RecipeEditor({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editItemName, setEditItemName] = useState("");
+  const [editItemQuantity, setEditItemQuantity] = useState("");
+  const [editItemUnit, setEditItemUnit] = useState("");
+  const [editItemNote, setEditItemNote] = useState("");
 
   const components = recipes.filter(
     (candidate) =>
@@ -301,6 +306,42 @@ export default function RecipeEditor({
       finish();
     } catch (removeError) {
       finish(removeError);
+    }
+  }
+
+
+  function beginItemEdit(item: RecipeItemRecord) {
+    setEditingItemId(item.id);
+    setEditItemName(item.displayName);
+    setEditItemQuantity(item.quantity.toString());
+    setEditItemUnit(item.unit);
+    setEditItemNote(item.preparationNote ?? "");
+    setMessage("");
+    setError("");
+  }
+
+  async function saveItemEdit(item: RecipeItemRecord) {
+    if (!editItemName.trim() || !editItemQuantity || !editItemUnit) return;
+    begin();
+    try {
+      await readResponse(
+        await fetch("/api/recipe-items/" + item.id, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: editItemName,
+            quantity: Number(editItemQuantity),
+            unit: editItemUnit,
+            preparationNote: editItemNote,
+          }),
+        }),
+      );
+      setEditingItemId(null);
+      setMessage("Recipe line saved.");
+      router.refresh();
+      finish();
+    } catch (saveError) {
+      finish(saveError);
     }
   }
 
@@ -580,22 +621,42 @@ export default function RecipeEditor({
         </div>
 
         <div className="mt-5 border border-zinc-800">
-          {items.length === 0 ? <p className="p-3 text-sm text-zinc-400">No recipe items yet.</p> : items.map((item) => (
-            <div key={item.id} className="flex items-center gap-3 border-b border-zinc-800 px-3 py-2 last:border-b-0">
-              <span className="w-20 text-right">{item.quantity} {unitLabels[item.unit] ?? item.unit}</span>
-              <span className="flex-1">{item.displayName}{item.preparationNote ? <span className="ml-2 text-zinc-400">— {item.preparationNote}</span> : null}</span>
-              <span className="text-xs capitalize text-zinc-500">{item.itemType}</span>
-              {item.itemType === "component" && item.componentRecipeId ? (
-                <Link
-                  href={"/planning/recipes/" + item.componentRecipeId}
-                  className="border border-blue-700 px-2 py-1 text-blue-300"
-                >
-                  Edit
-                </Link>
-              ) : null}
-              <button type="button" onClick={() => remove("/api/recipe-items/" + item.id)} className="border border-red-800 px-2 py-1 text-red-300">Remove</button>
-            </div>
-          ))}
+          {items.length === 0 ? <p className="p-3 text-sm text-zinc-400">No recipe items yet.</p> : items.map((item) => {
+            const sourceKind =
+              item.itemType === "ingredient"
+                ? ingredients.find((entry) => entry.id === item.ingredientId)?.measurementKind
+                : recipes.find((entry) => entry.id === item.componentRecipeId)?.yieldKind;
+            const rowUnits = unitsFor(sourceKind);
+            return editingItemId === item.id ? (
+              <div key={item.id} className="grid gap-2 border-b border-zinc-800 px-3 py-2 last:border-b-0 md:grid-cols-[auto_7rem_8rem_1fr_1.5fr_auto_auto]">
+                <button type="button" title="Cancel line edit" onClick={() => setEditingItemId(null)} className="border border-zinc-600 px-2 py-1">✎</button>
+                <input type="number" min="0" step="any" value={editItemQuantity} onChange={(event) => setEditItemQuantity(event.target.value)} className="min-w-0 border border-zinc-600 bg-black px-2 py-1" />
+                <select value={editItemUnit} onChange={(event) => setEditItemUnit(event.target.value)} className="min-w-0 border border-zinc-600 bg-black px-2 py-1">
+                  {rowUnits.map((value) => <option key={value} value={value}>{unitLabels[value] ?? value}</option>)}
+                </select>
+                <input value={editItemName} onChange={(event) => setEditItemName(event.target.value)} className="min-w-0 border border-zinc-600 bg-black px-2 py-1" />
+                <input value={editItemNote} onChange={(event) => setEditItemNote(event.target.value)} placeholder="Preparation note" className="min-w-0 border border-zinc-600 bg-black px-2 py-1" />
+                <button type="button" disabled={busy || !editItemName.trim() || !editItemQuantity} onClick={() => saveItemEdit(item)} className="border border-blue-600 px-3 py-1 disabled:opacity-40">Save</button>
+                <button type="button" onClick={() => setEditingItemId(null)} className="border border-zinc-600 px-3 py-1">Cancel</button>
+              </div>
+            ) : (
+              <div key={item.id} className="flex items-center gap-3 border-b border-zinc-800 px-3 py-2 last:border-b-0">
+                <button type="button" title="Edit this recipe line" onClick={() => beginItemEdit(item)} className="border border-zinc-600 px-2 py-1">✎</button>
+                <span className="w-20 text-right">{item.quantity} {unitLabels[item.unit] ?? item.unit}</span>
+                <span className="flex-1">{item.displayName}{item.preparationNote ? <span className="ml-2 text-zinc-400">— {item.preparationNote}</span> : null}</span>
+                <span className="text-xs capitalize text-zinc-500">{item.itemType}</span>
+                {item.itemType === "component" && item.componentRecipeId ? (
+                  <Link
+                    href={"/planning/recipes/" + item.componentRecipeId}
+                    className="border border-blue-700 px-2 py-1 text-blue-300"
+                  >
+                    Open Recipe
+                  </Link>
+                ) : null}
+                <button type="button" onClick={() => remove("/api/recipe-items/" + item.id)} className="border border-red-800 px-2 py-1 text-red-300">Remove</button>
+              </div>
+            );
+          })}
         </div>
 
         <div className="mt-5 border-t border-zinc-800 pt-4">
