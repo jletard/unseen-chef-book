@@ -7,6 +7,7 @@ type RepairDataset = "sides" | "categories" | "proteinTypes";
 
 type MergeRequest = {
   dataset?: RepairDataset;
+  action?: "merge" | "remove";
   canonicalId?: string;
   canonicalName?: string;
   duplicateIds?: string[];
@@ -80,14 +81,30 @@ export async function POST(request: Request) {
     ),
   );
 
-  if (!dataset || !(dataset in config) || !canonicalId) {
+  if (!dataset || !(dataset in config)) {
     return NextResponse.json(
-      { error: "A dataset and canonical value are required." },
+      { error: "A repair dataset is required." },
       { status: 400 },
     );
   }
 
-  if (duplicateIds.length === 0 && !requestedCanonicalName) {
+  const removing = body.action === "remove";
+
+  if (removing && dataset !== "sides") {
+    return NextResponse.json(
+      { error: "Only side records can be removed completely." },
+      { status: 400 },
+    );
+  }
+
+  if (!removing && !canonicalId) {
+    return NextResponse.json(
+      { error: "A canonical value is required." },
+      { status: 400 },
+    );
+  }
+
+  if (duplicateIds.length === 0 && (!requestedCanonicalName || removing)) {
     return NextResponse.json(
       { error: "Select at least one duplicate to merge." },
       { status: 400 },
@@ -95,6 +112,113 @@ export async function POST(request: Request) {
   }
 
   const repairConfig = config[dataset];
+
+  if (removing) {
+    const { data: removalData, error: removalError } = await supabaseAdmin
+      .from("side_items")
+      .select("id, name")
+      .in("id", duplicateIds);
+
+    if (removalError || (removalData ?? []).length !== duplicateIds.length) {
+      return NextResponse.json(
+        { error: "One or more selected sides could not be loaded." },
+        { status: 409 },
+      );
+    }
+
+    const removalNames = new Set(
+      (removalData ?? []).map((record) => String(record.name)),
+    );
+    const { data: menuData, error: menuError } = await supabaseAdmin
+      .from("menu_items_v2")
+      .select("id, name, sides, category, protein_type");
+
+    if (menuError) {
+      return NextResponse.json(
+        { error: "Current menu-item references could not be loaded." },
+        { status: 500 },
+      );
+    }
+
+    const changedMenuItems: string[] = [];
+
+    for (const item of (menuData ?? []) as MenuItemRow[]) {
+      const currentSides = item.sides ?? [];
+
+      if (!currentSides.some((side) => removalNames.has(side))) {
+        continue;
+      }
+
+      const sides = currentSides.filter((side) => !removalNames.has(side));
+      const { error } = await supabaseAdmin
+        .from("menu_items_v2")
+        .update({ sides })
+        .eq("id", item.id);
+
+      if (error) {
+        return NextResponse.json(
+          {
+            error:
+              "The removal stopped while updating " +
+              item.name +
+              ". No side records were deleted.",
+          },
+          { status: 500 },
+        );
+      }
+
+      changedMenuItems.push(item.name);
+    }
+
+    for (const field of ["default_side_1_id", "default_side_2_id"]) {
+      const { error: legacyError } = await supabaseAdmin
+        .from("menu_items")
+        .update({ [field]: null })
+        .in(field, duplicateIds);
+
+      if (legacyError) {
+        return NextResponse.json(
+          {
+            error:
+              "Current menu items were updated, but legacy " +
+              field +
+              " references could not be cleared. No side records were deleted: " +
+              legacyError.message,
+          },
+          { status: 500 },
+        );
+      }
+    }
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("side_items")
+      .delete()
+      .in("id", duplicateIds);
+
+    if (deleteError) {
+      return NextResponse.json(
+        {
+          error:
+            "Menu-item references were cleared, but the side records could not be deleted: " +
+            deleteError.message,
+        },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      canonicalName: "Removed",
+      mergedCount: duplicateIds.length,
+      changedMenuItems,
+    });
+  }
+
+  if (!canonicalId) {
+    return NextResponse.json(
+      { error: "A canonical value is required." },
+      { status: 400 },
+    );
+  }
 
   const [
     { data: canonicalData, error: canonicalError },

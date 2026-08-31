@@ -65,14 +65,17 @@ export default function DataRepairTool({ menuItems, records }: Props) {
     selectedIds.includes(record.id),
   );
   const usingOther = canonicalChoice === "__other__";
+  const usingRemove = canonicalChoice === "__remove__";
   const canonicalRecordId = usingOther
     ? selectedRecords[0]?.id
-    : canonicalChoice;
-  const duplicateRecords = selectedRecords.filter(
-    (record) => record.id !== canonicalRecordId,
-  );
+    : usingRemove
+      ? undefined
+      : canonicalChoice;
+  const duplicateRecords = usingRemove
+    ? selectedRecords
+    : selectedRecords.filter((record) => record.id !== canonicalRecordId);
   const selectedNames = new Set(
-    (usingOther ? selectedRecords : duplicateRecords).map(
+    (usingOther || usingRemove ? selectedRecords : duplicateRecords).map(
       (record) => record.name,
     ),
   );
@@ -82,7 +85,11 @@ export default function DataRepairTool({ menuItems, records }: Props) {
   const canonical = selectedRecords.find(
     (record) => record.id === canonicalChoice,
   );
-  const targetName = usingOther ? customName.trim() : canonical?.name ?? "";
+  const targetName = usingRemove
+    ? "Remove completely"
+    : usingOther
+      ? customName.trim()
+      : canonical?.name ?? "";
 
   function reset(nextDataset?: RepairDataset) {
     if (nextDataset) {
@@ -110,7 +117,12 @@ export default function DataRepairTool({ menuItems, records }: Props) {
   async function merge() {
     const canonicalId = canonicalRecordId;
 
-    if (!canonicalId || !targetName) {
+    if (usingRemove && selectedRecords.length === 0) {
+      setError("Select at least one side to remove.");
+      return;
+    }
+
+    if (!usingRemove && (!canonicalId || !targetName)) {
       setError(
         usingOther
           ? "Enter the new canonical name."
@@ -119,7 +131,7 @@ export default function DataRepairTool({ menuItems, records }: Props) {
       return;
     }
 
-    if (!usingOther && duplicateRecords.length === 0) {
+    if (!usingOther && !usingRemove && duplicateRecords.length === 0) {
       setError("Select at least one duplicate to merge.");
       return;
     }
@@ -128,11 +140,15 @@ export default function DataRepairTool({ menuItems, records }: Props) {
       .map((record) => record.name)
       .join(", ");
     const confirmed = window.confirm(
-      'Merge ' +
-        duplicateList +
-        ' into "' +
-        targetName +
-        '"? This updates current menu items and permanently removes the duplicate catalog records. Historical orders will not change.',
+      usingRemove
+        ? "Remove " +
+            duplicateList +
+            " from current menu items and permanently delete the selected side records? Historical orders will not change."
+        : 'Merge ' +
+            duplicateList +
+            ' into "' +
+            targetName +
+            '"? This updates current menu items and permanently removes the duplicate catalog records. Historical orders will not change.',
     );
 
     if (!confirmed) {
@@ -149,6 +165,7 @@ export default function DataRepairTool({ menuItems, records }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           dataset,
+          action: usingRemove ? "remove" : "merge",
           canonicalId,
           canonicalName: usingOther ? targetName : undefined,
           duplicateIds: duplicateRecords.map((record) => record.id),
@@ -284,6 +301,9 @@ export default function DataRepairTool({ menuItems, records }: Props) {
                 </option>
               ))}
               <option value="__other__">-- Other --</option>
+              {dataset === "sides" && (
+                <option value="__remove__">-- Remove completely --</option>
+              )}
             </select>
           </label>
 
@@ -311,7 +331,9 @@ export default function DataRepairTool({ menuItems, records }: Props) {
                 <p className="mt-2 text-sm text-zinc-500">
                   {usingOther
                     ? "The selected record will be renamed; no duplicate row will be removed."
-                    : "Select a canonical value and at least one other record."}
+                    : usingRemove
+                      ? "Select at least one side to remove."
+                      : "Select a canonical value and at least one other record."}
                 </p>
               ) : (
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
@@ -349,19 +371,21 @@ export default function DataRepairTool({ menuItems, records }: Props) {
             disabled={
               busy ||
               !targetName ||
-              (!usingOther && duplicateRecords.length === 0)
+              (!usingOther && !usingRemove && duplicateRecords.length === 0)
             }
             onClick={merge}
             className="mt-4 border border-red-500 px-4 py-2 font-semibold text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy
               ? "Merging..."
-              : targetName
-                ? (usingOther ? "Rename and merge into " : "Merge into ") +
-                  targetName
-                : usingOther
-                  ? "Enter canonical name"
-                  : "Choose canonical value"}
+              : usingRemove
+                ? "Remove selected sides completely"
+                : targetName
+                  ? (usingOther ? "Rename and merge into " : "Merge into ") +
+                    targetName
+                  : usingOther
+                    ? "Enter canonical name"
+                    : "Choose canonical value"}
           </button>
         </section>
       )}
