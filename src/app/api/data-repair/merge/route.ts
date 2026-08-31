@@ -8,6 +8,7 @@ type RepairDataset = "sides" | "categories" | "proteinTypes";
 type MergeRequest = {
   dataset?: RepairDataset;
   canonicalId?: string;
+  canonicalName?: string;
   duplicateIds?: string[];
 };
 
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
 
   const dataset = body.dataset;
   const canonicalId = body.canonicalId?.trim();
+  const requestedCanonicalName = body.canonicalName?.trim();
   const duplicateIds = Array.from(
     new Set(
       (body.duplicateIds ?? [])
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (duplicateIds.length === 0) {
+  if (duplicateIds.length === 0 && !requestedCanonicalName) {
     return NextResponse.json(
       { error: "Select at least one duplicate to merge." },
       { status: 400 },
@@ -130,10 +132,40 @@ export async function POST(request: Request) {
     );
   }
 
-  const canonicalName = String(canonicalData.name);
+  const originalCanonicalName = String(canonicalData.name);
+  let canonicalName = originalCanonicalName;
+
+  if (requestedCanonicalName) {
+    if (requestedCanonicalName !== originalCanonicalName) {
+      const { error: renameError } = await supabaseAdmin
+        .from(repairConfig.table)
+        .update({ name: requestedCanonicalName })
+        .eq("id", canonicalId);
+
+      if (renameError) {
+        return NextResponse.json(
+          {
+            error:
+              'The canonical value could not be renamed to "' +
+              requestedCanonicalName +
+              '": ' +
+              renameError.message,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    canonicalName = requestedCanonicalName;
+  }
+
   const duplicateNames = new Set(
     (duplicateData ?? []).map((record) => String(record.name)),
   );
+
+  if (canonicalName !== originalCanonicalName) {
+    duplicateNames.add(originalCanonicalName);
+  }
 
   const { data: menuData, error: menuError } = await supabaseAdmin
     .from("menu_items_v2")
@@ -241,10 +273,13 @@ export async function POST(request: Request) {
     }
   }
 
-  const { error: deleteError } = await supabaseAdmin
-    .from(repairConfig.table)
-    .delete()
-    .in("id", duplicateIds);
+  const { error: deleteError } =
+    duplicateIds.length > 0
+      ? await supabaseAdmin
+          .from(repairConfig.table)
+          .delete()
+          .in("id", duplicateIds)
+      : { error: null };
 
   if (deleteError) {
     return NextResponse.json(

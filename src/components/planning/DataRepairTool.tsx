@@ -42,7 +42,8 @@ export default function DataRepairTool({ menuItems, records }: Props) {
   const [dataset, setDataset] = useState<RepairDataset>("sides");
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [canonicalId, setCanonicalId] = useState("");
+  const [canonicalChoice, setCanonicalChoice] = useState("");
+  const [customName, setCustomName] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -63,18 +64,25 @@ export default function DataRepairTool({ menuItems, records }: Props) {
   const selectedRecords = currentRecords.filter((record) =>
     selectedIds.includes(record.id),
   );
+  const usingOther = canonicalChoice === "__other__";
+  const canonicalRecordId = usingOther
+    ? selectedRecords[0]?.id
+    : canonicalChoice;
   const duplicateRecords = selectedRecords.filter(
-    (record) => record.id !== canonicalId,
+    (record) => record.id !== canonicalRecordId,
   );
   const selectedNames = new Set(
-    duplicateRecords.map((record) => record.name),
+    (usingOther ? selectedRecords : duplicateRecords).map(
+      (record) => record.name,
+    ),
   );
   const affectedMenuItems = menuItems.filter((item) =>
     referencedBy(dataset, selectedNames, item),
   );
-  const canonical = currentRecords.find(
-    (record) => record.id === canonicalId,
+  const canonical = selectedRecords.find(
+    (record) => record.id === canonicalChoice,
   );
+  const targetName = usingOther ? customName.trim() : canonical?.name ?? "";
 
   function reset(nextDataset?: RepairDataset) {
     if (nextDataset) {
@@ -83,7 +91,8 @@ export default function DataRepairTool({ menuItems, records }: Props) {
 
     setQuery("");
     setSelectedIds([]);
-    setCanonicalId("");
+    setCanonicalChoice("");
+    setCustomName("");
     setMessage("");
     setError("");
   }
@@ -99,8 +108,19 @@ export default function DataRepairTool({ menuItems, records }: Props) {
   }
 
   async function merge() {
-    if (!canonical || duplicateRecords.length === 0) {
-      setError("Choose a canonical value and at least one duplicate.");
+    const canonicalId = canonicalRecordId;
+
+    if (!canonicalId || !targetName) {
+      setError(
+        usingOther
+          ? "Enter the new canonical name."
+          : "Choose which selected value to keep.",
+      );
+      return;
+    }
+
+    if (!usingOther && duplicateRecords.length === 0) {
+      setError("Select at least one duplicate to merge.");
       return;
     }
 
@@ -111,7 +131,7 @@ export default function DataRepairTool({ menuItems, records }: Props) {
       'Merge ' +
         duplicateList +
         ' into "' +
-        canonical.name +
+        targetName +
         '"? This updates current menu items and permanently removes the duplicate catalog records. Historical orders will not change.',
     );
 
@@ -130,6 +150,7 @@ export default function DataRepairTool({ menuItems, records }: Props) {
         body: JSON.stringify({
           dataset,
           canonicalId,
+          canonicalName: usingOther ? targetName : undefined,
           duplicateIds: duplicateRecords.map((record) => record.id),
         }),
       });
@@ -158,7 +179,8 @@ export default function DataRepairTool({ menuItems, records }: Props) {
       );
       setQuery("");
       setSelectedIds([]);
-      setCanonicalId("");
+      setCanonicalChoice("");
+      setCustomName("");
       router.refresh();
     } catch (mergeError) {
       setError(
@@ -248,18 +270,37 @@ export default function DataRepairTool({ menuItems, records }: Props) {
               Keep this canonical value
             </span>
             <select
-              value={canonicalId}
-              onChange={(event) => setCanonicalId(event.target.value)}
+              value={canonicalChoice}
+              onChange={(event) => {
+                setCanonicalChoice(event.target.value);
+                setCustomName("");
+              }}
               className="w-full border border-zinc-600 bg-black px-3 py-2"
             >
               <option value="">Choose the value to keep</option>
-              {currentRecords.map((record) => (
+              {selectedRecords.map((record) => (
                 <option key={record.id} value={record.id}>
                   {record.name}
                 </option>
               ))}
+              <option value="__other__">-- Other --</option>
             </select>
           </label>
+
+          {usingOther && (
+            <label className="mt-4 block max-w-xl text-sm">
+              <span className="mb-2 block font-semibold text-zinc-200">
+                New canonical name
+              </span>
+              <input
+                value={customName}
+                onChange={(event) => setCustomName(event.target.value)}
+                placeholder="Seasonal Vegetables"
+                className="w-full border border-zinc-600 bg-black px-3 py-2"
+                autoFocus
+              />
+            </label>
+          )}
 
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             <div>
@@ -268,7 +309,9 @@ export default function DataRepairTool({ menuItems, records }: Props) {
               </h3>
               {duplicateRecords.length === 0 ? (
                 <p className="mt-2 text-sm text-zinc-500">
-                  Select a canonical value and at least one other record.
+                  {usingOther
+                    ? "The selected record will be renamed; no duplicate row will be removed."
+                    : "Select a canonical value and at least one other record."}
                 </p>
               ) : (
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
@@ -303,15 +346,22 @@ export default function DataRepairTool({ menuItems, records }: Props) {
 
           <button
             type="button"
-            disabled={busy || !canonical || duplicateRecords.length === 0}
+            disabled={
+              busy ||
+              !targetName ||
+              (!usingOther && duplicateRecords.length === 0)
+            }
             onClick={merge}
             className="mt-4 border border-red-500 px-4 py-2 font-semibold text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy
               ? "Merging..."
-              : canonical
-                ? "Merge into " + canonical.name
-                : "Choose canonical value"}
+              : targetName
+                ? (usingOther ? "Rename and merge into " : "Merge into ") +
+                  targetName
+                : usingOther
+                  ? "Enter canonical name"
+                  : "Choose canonical value"}
           </button>
         </section>
       )}
