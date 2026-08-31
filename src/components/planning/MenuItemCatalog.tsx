@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type {
@@ -26,94 +26,69 @@ export default function MenuItemCatalog({
   links: MenuItemRecipeLink[];
 }) {
   const router = useRouter();
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [existingRecipeId, setExistingRecipeId] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState<"main" | "component">("main");
-  const [busy, setBusy] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const recipesById = new Map(recipes.map((recipe) => [recipe.id, recipe]));
 
-  function open(item: MenuItemRecord) {
-    setOpenId((current) => (current === item.id ? null : item.id));
-    setExistingRecipeId("");
-    setNewName(item.shortName || item.name);
-    setNewType("main");
-    setError("");
-  }
-
-  async function attach(menuItemId: string, recipeId: string, role: string) {
+  async function attach(menuItemId: string, recipeId: string) {
     const response = await fetch("/api/menu-item-recipes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ menuItemId, recipeId, role }),
+      body: JSON.stringify({ menuItemId, recipeId, role: "main" }),
     });
     const result = (await response.json()) as { error?: string };
-
     if (!response.ok) {
       throw new Error(result.error || "Recipe could not be attached.");
     }
   }
 
-  async function attachExisting(menuItemId: string) {
-    if (!existingRecipeId) return;
-    const recipe = recipesById.get(existingRecipeId);
-    if (!recipe) return;
-    setBusy(true);
-    setError("");
+  async function openRecipe(
+    item: MenuItemRecord,
+    itemLinks: MenuItemRecipeLink[],
+  ) {
+    const linked =
+      itemLinks
+        .map((link) => ({
+          link,
+          recipe: recipesById.get(link.recipeId),
+        }))
+        .find(({ link, recipe }) => recipe && link.role === "main")?.recipe ??
+      itemLinks
+        .map((link) => recipesById.get(link.recipeId))
+        .find((recipe) => recipe);
 
-    try {
-      await attach(
-        menuItemId,
-        recipe.id,
-        recipe.recipeType === "component" ? "component" : "main",
-      );
-      setExistingRecipeId("");
-      router.push("/planning/recipes/" + recipe.id);
-    } catch (attachError) {
-      setError(
-        attachError instanceof Error ? attachError.message : "Attach failed.",
-      );
-    } finally {
-      setBusy(false);
+    if (linked) {
+      router.push("/planning/recipes/" + linked.id);
+      return;
     }
-  }
 
-  async function createAndAttach(menuItemId: string) {
-    if (!newName.trim()) return;
-    setBusy(true);
+    setBusyId(item.id);
     setError("");
-
     try {
       const response = await fetch("/api/recipes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, recipeType: newType }),
+        body: JSON.stringify({
+          name: item.shortName || item.name,
+          recipeType: "main",
+        }),
       });
       const result = (await response.json()) as {
         id?: string;
         error?: string;
       };
-
       if (!response.ok || !result.id) {
         throw new Error(result.error || "Recipe could not be created.");
       }
-
-      await attach(
-        menuItemId,
-        result.id,
-        newType === "component" ? "component" : "main",
-      );
-      setNewName("");
+      await attach(item.id, result.id);
       router.push("/planning/recipes/" + result.id);
     } catch (creationError) {
       setError(
         creationError instanceof Error
           ? creationError.message
-          : "Creation failed.",
+          : "Recipe could not be opened.",
       );
-    } finally {
-      setBusy(false);
+      setBusyId(null);
     }
   }
 
@@ -122,6 +97,12 @@ export default function MenuItemCatalog({
       <div className="mb-3 text-sm text-zinc-400">
         {items.length} catalog item{items.length === 1 ? "" : "s"}
       </div>
+
+      {error ? (
+        <p className="mb-3 border border-red-800 p-3 text-sm text-red-300">
+          {error}
+        </p>
+      ) : null}
 
       <div className="overflow-x-auto border border-zinc-800">
         <table className="w-full min-w-[1000px] border-collapse text-sm">
@@ -141,12 +122,8 @@ export default function MenuItemCatalog({
               const itemLinks = links.filter(
                 (link) => link.menuItemId === item.id,
               );
-
-              return [
-                <tr
-                  key={item.id}
-                  className="border-t border-zinc-800"
-                >
+              return (
+                <tr key={item.id} className="border-t border-zinc-800">
                   <td className="max-w-md px-3 py-2">
                     <div className="font-medium text-zinc-100">
                       {item.shortName || item.name}
@@ -184,92 +161,19 @@ export default function MenuItemCatalog({
                   <td className="px-3 py-2">
                     <button
                       type="button"
-                      onClick={() => open(item)}
-                      className="border border-blue-500 px-3 py-1"
+                      disabled={busyId !== null}
+                      onClick={() => openRecipe(item, itemLinks)}
+                      className="border border-blue-500 px-3 py-1 disabled:opacity-40"
                     >
-                      {openId === item.id ? "Close" : "Add / Edit Recipes"}
+                      {busyId === item.id
+                        ? "Opening..."
+                        : itemLinks.length
+                          ? "Open Recipe"
+                          : "Create Recipe"}
                     </button>
                   </td>
-                </tr>,
-                openId === item.id ? (
-                  <tr key={item.id + ":planner"}>
-                    <td
-                      colSpan={7}
-                      className="border-t border-blue-900 bg-zinc-950 p-4"
-                    >
-                      <div className="grid gap-5 lg:grid-cols-2">
-                        <section>
-                          <h3 className="font-semibold">
-                            Attach existing recipe or component
-                          </h3>
-                          <div className="mt-3 flex gap-2">
-                            <select
-                              value={existingRecipeId}
-                              onChange={(event) =>
-                                setExistingRecipeId(event.target.value)
-                              }
-                              className="min-w-0 flex-1 border border-zinc-600 bg-black px-3 py-2"
-                            >
-                              <option value="">Choose existing</option>
-                              {recipes.map((recipe) => (
-                                <option key={recipe.id} value={recipe.id}>
-                                  {recipe.name} ({recipe.recipeType})
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              disabled={busy || !existingRecipeId}
-                              onClick={() => attachExisting(item.id)}
-                              className="border border-blue-500 px-3 py-2 disabled:opacity-40"
-                            >
-                              Attach & Open
-                            </button>
-                          </div>
-                        </section>
-
-                        <section>
-                          <h3 className="font-semibold">
-                            Create and attach draft
-                          </h3>
-                          <div className="mt-3 grid gap-2 sm:grid-cols-[10rem_1fr_auto]">
-                            <select
-                              value={newType}
-                              onChange={(event) =>
-                                setNewType(
-                                  event.target.value as "main" | "component",
-                                )
-                              }
-                              className="border border-zinc-600 bg-black px-3 py-2"
-                            >
-                              <option value="main">Main recipe</option>
-                              <option value="component">Component</option>
-                            </select>
-                            <input
-                              value={newName}
-                              onChange={(event) =>
-                                setNewName(event.target.value)
-                              }
-                              className="border border-zinc-600 bg-black px-3 py-2"
-                            />
-                            <button
-                              type="button"
-                              disabled={busy || !newName.trim()}
-                              onClick={() => createAndAttach(item.id)}
-                              className="border border-blue-500 px-3 py-2 disabled:opacity-40"
-                            >
-                              {busy ? "Saving..." : "Create & Open"}
-                            </button>
-                          </div>
-                        </section>
-                      </div>
-                      {error && (
-                        <p className="mt-3 text-sm text-red-300">{error}</p>
-                      )}
-                    </td>
-                  </tr>
-                ) : null,
-              ];
+                </tr>
+              );
             })}
           </tbody>
         </table>
