@@ -71,8 +71,16 @@ export default async function ReconciliationPage() {
                 >
                   {recipe.name}
                 </Link>
-                <div className="mt-1 text-xs capitalize text-amber-300">
-                  Draft {recipe.recipeType}
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="text-xs capitalize text-amber-300">
+                    Draft {recipe.recipeType}
+                  </span>
+                  <Link
+                    href={"/planning/recipes/" + recipe.id}
+                    className="border border-blue-500 px-2 py-1 text-xs"
+                  >
+                    Edit Recipe
+                  </Link>
                 </div>
               </div>
             ))}

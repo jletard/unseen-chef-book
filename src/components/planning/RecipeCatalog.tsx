@@ -31,12 +31,17 @@ export default function RecipeCatalog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, recipeType }),
       });
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as {
+        id?: string;
+        error?: string;
+      };
 
-      if (!response.ok) throw new Error(result.error || "Creation failed.");
+      if (!response.ok || !result.id) {
+        throw new Error(result.error || "Creation failed.");
+      }
 
       setName("");
-      router.refresh();
+      router.push("/planning/recipes/" + result.id);
     } catch (creationError) {
       setError(
         creationError instanceof Error
@@ -69,7 +74,7 @@ export default function RecipeCatalog({
             disabled={busy || !name.trim()}
             className="border border-blue-500 px-4 py-2 disabled:opacity-40"
           >
-            {busy ? "Adding..." : "Add Draft"}
+            {busy ? "Adding..." : "Create & Open"}
           </button>
         </div>
         {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
@@ -90,15 +95,23 @@ export default function RecipeCatalog({
               >
                 {recipe.name}
               </Link>
-              <span
-                className={
-                  recipe.status === "complete"
-                    ? "text-sm text-emerald-400"
-                    : "text-sm text-amber-300"
-                }
-              >
-                {recipe.status === "complete" ? "Complete" : "Draft"}
-              </span>
+              <div className="flex items-center gap-3">
+                <span
+                  className={
+                    recipe.status === "complete"
+                      ? "text-sm text-emerald-400"
+                      : "text-sm text-amber-300"
+                  }
+                >
+                  {recipe.status === "complete" ? "Complete" : "Draft"}
+                </span>
+                <Link
+                  href={"/planning/recipes/" + recipe.id}
+                  className="border border-blue-500 px-3 py-1 text-sm"
+                >
+                  Edit Recipe
+                </Link>
+              </div>
             </div>
           ))
         )}

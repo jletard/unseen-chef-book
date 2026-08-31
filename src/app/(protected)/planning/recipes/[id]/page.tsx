@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import RecipeEditor from "@/components/planning/RecipeEditor";
@@ -27,6 +28,17 @@ export default async function RecipePage({
 
   return (
     <>
+      <div className="mb-4 flex flex-wrap gap-3 text-sm">
+        <Link href="/planning/reconciliation" className="text-blue-300 hover:underline">
+          ← Reconciliation
+        </Link>
+        <Link
+          href={recipe.recipeType === "component" ? "/planning/components" : "/planning/main-dishes"}
+          className="text-blue-300 hover:underline"
+        >
+          {recipe.recipeType === "component" ? "Components" : "Main Dishes"}
+        </Link>
+      </div>
       <h1 className="text-2xl font-bold">{recipe.name}</h1>
       <p className="mt-2 text-sm text-zinc-400">
         Define the smallest practical batch, purchased ingredients, reusable

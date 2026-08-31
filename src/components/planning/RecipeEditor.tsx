@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import SecretAIImportBox, { type SecretAIFormSchema } from "@/components/SecretAIImportBox/SecretAIImportBox";
+
 import type {
   IngredientRecord,
   RecipeItemRecord,
@@ -20,6 +22,100 @@ const unitLabels: Record<string, string> = {
   quart: "quart",
   g: "g",
   kg: "kg",
+};
+
+
+const recipeImportSchema = {
+  name: "Cookbook Recipe",
+  description:
+    "Create or improve this recipe. Return the complete recipe, including unchanged information. Keep the batch as small as practical. Purchased items are ingredients; preparations with their own recipe are components. Cups and quarts are liquid-only. For dry or solid items, use tsp or tbsp only below 2 tbsp, then use g or kg.",
+  fields: {
+    name: { type: "string", required: true, description: "Clear recipe name." },
+    recipe_type: {
+      type: "enum",
+      required: true,
+      values: ["main", "side", "component", "sauce", "dressing", "dessert", "bread", "other"],
+    },
+    yield_kind: {
+      type: "enum",
+      required: true,
+      values: ["servings", "liquid", "solid", "countable"],
+    },
+    base_yield: {
+      type: "number",
+      required: true,
+      description: "Amount produced by the written recipe.",
+    },
+    yield_unit: {
+      type: "enum",
+      required: true,
+      values: ["serving", "each", "fl_oz", "cup", "quart", "g", "kg"],
+    },
+    minimum_batch: {
+      type: "number",
+      required: true,
+      description: "Smallest practical batch.",
+    },
+    notes: { type: "string" },
+    items: {
+      type: "array",
+      required: true,
+      items: {
+        type: "object",
+        fields: {
+          name: { type: "string", required: true },
+          item_type: {
+            type: "enum",
+            required: true,
+            values: ["ingredient", "component"],
+          },
+          measurement_kind: {
+            type: "enum",
+            required: true,
+            values: ["liquid", "solid", "countable"],
+          },
+          quantity: { type: "number", required: true },
+          unit: {
+            type: "enum",
+            required: true,
+            values: ["serving", "each", "tsp", "tbsp", "fl_oz", "cup", "quart", "g", "kg"],
+          },
+          preparation_note: { type: "string" },
+        },
+      },
+    },
+    steps: {
+      type: "array",
+      required: true,
+      items: {
+        type: "object",
+        fields: {
+          instruction: { type: "string", required: true },
+        },
+      },
+    },
+  },
+} satisfies SecretAIFormSchema;
+
+type ImportedItem = {
+  name: string;
+  item_type: "ingredient" | "component";
+  measurement_kind: "liquid" | "solid" | "countable";
+  quantity: number;
+  unit: string;
+  preparation_note?: string;
+};
+
+type ImportedRecipe = {
+  name: string;
+  recipe_type: string;
+  yield_kind: string;
+  base_yield: number;
+  yield_unit: string;
+  minimum_batch: number;
+  notes?: string;
+  items: ImportedItem[];
+  steps: Array<{ instruction: string }>;
 };
 
 function unitsFor(kind: string | null | undefined) {
@@ -77,6 +173,7 @@ export default function RecipeEditor({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [importedRecipe, setImportedRecipe] = useState<ImportedRecipe | null>(null);
 
   const components = recipes.filter(
     (candidate) =>
@@ -244,6 +341,124 @@ export default function RecipeEditor({
     }
   }
 
+
+  function acceptAIImport(values: Record<string, unknown>) {
+    const imported = values as unknown as ImportedRecipe;
+    setName(imported.name ?? name);
+    setRecipeType(imported.recipe_type ?? recipeType);
+    setYieldKind(imported.yield_kind ?? yieldKind);
+    setBaseYield(imported.base_yield?.toString() ?? baseYield);
+    setYieldUnit(imported.yield_unit ?? yieldUnit);
+    setMinimumBatch(imported.minimum_batch?.toString() ?? minimumBatch);
+    setNotes(imported.notes ?? notes);
+    setImportedRecipe(imported);
+    setMessage("AI recipe loaded for review. Nothing has been saved yet.");
+    setError("");
+  }
+
+  async function applyAIImport() {
+    if (!importedRecipe) return;
+    if (!window.confirm("Replace this recipe's current items and steps with the reviewed AI import?")) return;
+    begin();
+    try {
+      await readResponse(
+        await fetch("/api/recipes/" + recipe.id, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: importedRecipe.name,
+            recipeType: importedRecipe.recipe_type,
+            status: "draft",
+            yieldKind: importedRecipe.yield_kind,
+            baseYield: Number(importedRecipe.base_yield),
+            yieldUnit: importedRecipe.yield_unit,
+            minimumBatch: Number(importedRecipe.minimum_batch),
+            notes: importedRecipe.notes ?? "",
+          }),
+        }),
+      );
+
+      for (const existing of items) {
+        await readResponse(await fetch("/api/recipe-items/" + existing.id, { method: "DELETE" }));
+      }
+      for (const existing of steps) {
+        await readResponse(await fetch("/api/recipe-steps/" + existing.id, { method: "DELETE" }));
+      }
+
+      for (const importedItem of importedRecipe.items ?? []) {
+        let sourceIdValue = "";
+        if (importedItem.item_type === "ingredient") {
+          const existing = ingredients.find(
+            (entry) => entry.name.toLowerCase() === importedItem.name.trim().toLowerCase(),
+          );
+          if (existing) {
+            sourceIdValue = existing.id;
+          } else {
+            const created = await readResponse(
+              await fetch("/api/ingredients", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  name: importedItem.name,
+                  measurementKind: importedItem.measurement_kind,
+                }),
+              }),
+            );
+            sourceIdValue = created.id ?? "";
+          }
+        } else {
+          const existing = components.find(
+            (entry) => entry.name.toLowerCase() === importedItem.name.trim().toLowerCase(),
+          );
+          if (existing) {
+            sourceIdValue = existing.id;
+          } else {
+            const created = await readResponse(
+              await fetch("/api/recipes", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: importedItem.name, recipeType: "component" }),
+              }),
+            );
+            sourceIdValue = created.id ?? "";
+          }
+        }
+        if (!sourceIdValue) throw new Error("Could not create " + importedItem.name + ".");
+        await readResponse(
+          await fetch("/api/recipes/" + recipe.id + "/items", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              itemType: importedItem.item_type,
+              sourceId: sourceIdValue,
+              quantity: Number(importedItem.quantity),
+              unit: importedItem.unit,
+              preparationNote: importedItem.preparation_note ?? "",
+            }),
+          }),
+        );
+      }
+
+      for (const importedStep of importedRecipe.steps ?? []) {
+        await readResponse(
+          await fetch("/api/recipes/" + recipe.id + "/steps", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ instruction: importedStep.instruction }),
+          }),
+        );
+      }
+
+      setStatus("draft");
+      setImportedRecipe(null);
+      setMessage("AI recipe applied as a draft. Review it, then mark it complete when ready.");
+      router.refresh();
+      finish();
+    } catch (importError) {
+      finish(importError);
+    }
+  }
+
   function changeYieldKind(nextKind: string) {
     setYieldKind(nextKind);
     const nextUnits = yieldUnitsFor(nextKind);
@@ -262,6 +477,57 @@ export default function RecipeEditor({
 
   return (
     <div className="mt-6 space-y-6">
+
+      <section className="border border-zinc-700 bg-zinc-950 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Secret AI+ Recipe Assistant</h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              Ask AI for a complete draft, paste the JSON response here, review it, then apply it.
+            </p>
+          </div>
+          <SecretAIImportBox
+            formSchema={recipeImportSchema}
+            currentValues={{
+              name,
+              recipe_type: recipeType,
+              yield_kind: yieldKind,
+              base_yield: baseYield ? Number(baseYield) : null,
+              yield_unit: yieldUnit,
+              minimum_batch: minimumBatch ? Number(minimumBatch) : null,
+              notes,
+              items: items.map((item) => ({
+                name: item.displayName,
+                item_type: item.itemType,
+                quantity: item.quantity,
+                unit: item.unit,
+                preparation_note: item.preparationNote ?? "",
+              })),
+              steps: steps.map((step) => ({ instruction: step.instruction })),
+            }}
+            onImport={acceptAIImport}
+            disabled={busy}
+          />
+        </div>
+        {importedRecipe ? (
+          <div className="mt-4 border border-blue-800 bg-blue-950/20 p-4">
+            <p className="font-semibold">Imported draft ready to review</p>
+            <p className="mt-1 text-sm text-zinc-300">
+              {importedRecipe.items?.length ?? 0} ingredients/components · {importedRecipe.steps?.length ?? 0} steps.
+              The fields below have been populated, but the recipe has not been changed in Supabase.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button type="button" disabled={busy} onClick={applyAIImport} className="border border-blue-500 px-4 py-2 disabled:opacity-40">
+                Apply Imported Recipe
+              </button>
+              <button type="button" disabled={busy} onClick={() => setImportedRecipe(null)} className="border border-zinc-600 px-4 py-2 disabled:opacity-40">
+                Discard Import
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       <section className="border border-zinc-700 bg-zinc-950 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Recipe definition</h2>

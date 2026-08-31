@@ -69,7 +69,7 @@ export default function MenuItemCatalog({
         recipe.recipeType === "component" ? "component" : "main",
       );
       setExistingRecipeId("");
-      router.refresh();
+      router.push("/planning/recipes/" + recipe.id);
     } catch (attachError) {
       setError(
         attachError instanceof Error ? attachError.message : "Attach failed.",
@@ -105,7 +105,7 @@ export default function MenuItemCatalog({
         newType === "component" ? "component" : "main",
       );
       setNewName("");
-      router.refresh();
+      router.push("/planning/recipes/" + result.id);
     } catch (creationError) {
       setError(
         creationError instanceof Error
@@ -187,7 +187,7 @@ export default function MenuItemCatalog({
                       onClick={() => open(item)}
                       className="border border-blue-500 px-3 py-1"
                     >
-                      {openId === item.id ? "Close" : "Plan"}
+                      {openId === item.id ? "Close" : "Add / Edit Recipes"}
                     </button>
                   </td>
                 </tr>,
@@ -223,7 +223,7 @@ export default function MenuItemCatalog({
                               onClick={() => attachExisting(item.id)}
                               className="border border-blue-500 px-3 py-2 disabled:opacity-40"
                             >
-                              Attach
+                              Attach & Open
                             </button>
                           </div>
                         </section>
@@ -258,7 +258,7 @@ export default function MenuItemCatalog({
                               onClick={() => createAndAttach(item.id)}
                               className="border border-blue-500 px-3 py-2 disabled:opacity-40"
                             >
-                              {busy ? "Saving..." : "Create"}
+                              {busy ? "Saving..." : "Create & Open"}
                             </button>
                           </div>
                         </section>
