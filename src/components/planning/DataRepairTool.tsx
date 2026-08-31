@@ -53,7 +53,7 @@ export default function DataRepairTool({ menuItems, records }: Props) {
     const search = query.trim().toLocaleLowerCase();
 
     if (!search) {
-      return [];
+      return currentRecords;
     }
 
     return currentRecords.filter((record) =>
@@ -256,11 +256,10 @@ export default function DataRepairTool({ menuItems, records }: Props) {
         </div>
       </section>
 
-      {query.trim() && (
-        <section>
-          <h2 className="text-lg font-semibold">
-            Matches ({matches.length})
-          </h2>
+      <section>
+        <h2 className="text-lg font-semibold">
+          {query.trim() ? "Matches" : labels[dataset]} ({matches.length})
+        </h2>
           {matches.length === 0 ? (
             <p className="mt-3 text-sm text-zinc-400">No matches found.</p>
           ) : (
@@ -287,8 +286,7 @@ export default function DataRepairTool({ menuItems, records }: Props) {
               ))}
             </div>
           )}
-        </section>
-      )}
+      </section>
 
       {selectedRecords.length > 0 && (
         <section className="border border-blue-700 bg-zinc-950 p-4">
