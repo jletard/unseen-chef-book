@@ -214,6 +214,33 @@ export async function POST(request: Request) {
     changedMenuItems.push(item.name);
   }
 
+  const legacyFields =
+    dataset === "sides"
+      ? ["default_side_1_id", "default_side_2_id"]
+      : dataset === "categories"
+        ? ["category_id"]
+        : ["protein_type_id"];
+
+  for (const field of legacyFields) {
+    const { error: legacyError } = await supabaseAdmin
+      .from("menu_items")
+      .update({ [field]: canonicalId })
+      .in(field, duplicateIds);
+
+    if (legacyError) {
+      return NextResponse.json(
+        {
+          error:
+            "Current menu items were updated, but legacy " +
+            field +
+            " references could not be repaired. No duplicate records were removed: " +
+            legacyError.message,
+        },
+        { status: 500 },
+      );
+    }
+  }
+
   const { error: deleteError } = await supabaseAdmin
     .from(repairConfig.table)
     .delete()
