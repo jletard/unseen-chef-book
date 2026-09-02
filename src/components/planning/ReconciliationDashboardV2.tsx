@@ -456,9 +456,11 @@ function FastReviewWorkspace({
   const [stage, setStage] = useState<ReviewStage>(
     drafts.some((draft) => draft.reviewBucket === "unreviewed") ? "unreviewed" : "needs_classification",
   );
+  const [reviewOffset, setReviewOffset] = useState(0);
   const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
   const stageDrafts = drafts.filter((draft) => draft.reviewBucket === stage);
-  const current = stageDrafts[0];
+  const currentIndex = stageDrafts.length ? reviewOffset % stageDrafts.length : 0;
+  const current = stageDrafts[currentIndex];
 
   async function moveDraft(draft: ReconciliationDraftRow, reviewBucket: ReviewStage) {
     setBusyDraftId(draft.id);
@@ -520,7 +522,14 @@ function FastReviewWorkspace({
           };
         }),
       );
-      setMessage(markReady ? `Saved “${draft.name}” and moved it to Ready.` : `Saved “${draft.name}”.`);
+      setMessage(
+        markReady && draft.reviewBucket !== "ready"
+          ? `Saved “${draft.name}” and moved it to Ready.`
+          : `Saved “${draft.name}”.`,
+      );
+      if (markReady && draft.reviewBucket === "ready" && stageDrafts.length > 1) {
+        setReviewOffset((offset) => offset + 1);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Draft could not be saved.");
     } finally {
@@ -555,7 +564,10 @@ function FastReviewWorkspace({
             <button
               key={tab.bucket}
               type="button"
-              onClick={() => setStage(tab.bucket)}
+              onClick={() => {
+                setStage(tab.bucket);
+                setReviewOffset(0);
+              }}
               className={stage === tab.bucket ? "border border-blue-500 bg-blue-950/30 px-3 py-2 text-sm" : "border border-zinc-700 px-3 py-2 text-sm text-zinc-300"}
             >
               {tab.label} ({count})
@@ -571,12 +583,14 @@ function FastReviewWorkspace({
       ) : (
         <DraftReviewCard
           draft={current}
-          position={1}
+          position={currentIndex + 1}
           total={stageDrafts.length}
           busy={busyDraftId === current.id}
           stage={stage}
           onMove={(bucket) => moveDraft(current, bucket)}
           onSave={(payload, markReady) => saveDraft(current, payload, markReady)}
+          onPrevious={() => setReviewOffset((offset) => offset <= 0 ? Math.max(stageDrafts.length - 1, 0) : offset - 1)}
+          onNext={() => setReviewOffset((offset) => stageDrafts.length ? (offset + 1) % stageDrafts.length : 0)}
         />
       )}
     </section>
@@ -591,6 +605,8 @@ function DraftReviewCard({
   stage,
   onMove,
   onSave,
+  onPrevious,
+  onNext,
 }: {
   draft: ReconciliationDraftRow;
   position: number;
@@ -599,6 +615,8 @@ function DraftReviewCard({
   stage: ReviewStage;
   onMove: (bucket: ReviewStage) => void;
   onSave: (payload: Record<string, unknown>, markReady: boolean) => void;
+  onPrevious: () => void;
+  onNext: () => void;
 }) {
   const items = Array.isArray(draft.draftPayload.items)
     ? draft.draftPayload.items as Array<Record<string, unknown>>
@@ -618,6 +636,12 @@ function DraftReviewCard({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {total > 1 && (
+            <>
+              <button type="button" onClick={onPrevious} className="border border-zinc-700 px-3 py-2 text-sm">Previous</button>
+              <button type="button" onClick={onNext} className="border border-zinc-700 px-3 py-2 text-sm">Next</button>
+            </>
+          )}
           {stage === "unreviewed" && (
             <>
               <button disabled={busy} onClick={() => onMove("ready")} className="border border-emerald-600 px-5 py-2 font-semibold text-emerald-300 disabled:opacity-40">Keep</button>
@@ -653,7 +677,7 @@ function DraftReviewCard({
           </ol>
         </div>
       </div>
-      {(stage === "minor" || stage === "major") && (
+      {(stage === "minor" || stage === "major" || stage === "ready") && (
         <DraftQuickEditor key={draft.id} draft={draft} busy={busy} onSave={onSave} />
       )}
     </article>
