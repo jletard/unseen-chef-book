@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { validateRecipeDraftPayload } from "@/lib/cookbook-v2/domain";
 import { createClient } from "@/lib/supabase/server";
 
 const uuidPattern =
@@ -19,22 +20,41 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  let body: { reviewBucket?: string };
+  let body: { reviewBucket?: string; draftPayload?: unknown };
   try {
-    body = (await request.json()) as { reviewBucket?: string };
+    body = (await request.json()) as { reviewBucket?: string; draftPayload?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
-  if (!body.reviewBucket || !allowedBuckets.has(body.reviewBucket)) {
+  if (body.reviewBucket !== undefined && !allowedBuckets.has(body.reviewBucket)) {
     return NextResponse.json({ error: "Invalid review destination." }, { status: 400 });
   }
+  if (body.reviewBucket === undefined && body.draftPayload === undefined) {
+    return NextResponse.json({ error: "No draft changes were supplied." }, { status: 400 });
+  }
+  if (body.draftPayload !== undefined) {
+    const validationErrors = validateRecipeDraftPayload(body.draftPayload);
+    if (validationErrors.length) {
+      return NextResponse.json(
+        { error: `${validationErrors[0].path}: ${validationErrors[0].message}` },
+        { status: 400 },
+      );
+    }
+  }
+
+  const changes: Record<string, unknown> = {
+    updated_by: user.id,
+    updated_at: new Date().toISOString(),
+  };
+  if (body.reviewBucket !== undefined) changes.review_bucket = body.reviewBucket;
+  if (body.draftPayload !== undefined) changes.draft_payload = body.draftPayload;
 
   const { data, error } = await supabase
     .from("recipe_drafts")
-    .update({ review_bucket: body.reviewBucket, updated_by: user.id, updated_at: new Date().toISOString() })
+    .update(changes)
     .eq("id", id)
     .eq("draft_state", "ready_for_review")
-    .select("id, review_bucket")
+    .select("id, review_bucket, draft_payload")
     .maybeSingle();
 
   if (error) {
@@ -46,5 +66,9 @@ export async function PATCH(
   }
   if (!data) return NextResponse.json({ error: "Reviewable draft not found." }, { status: 404 });
 
-  return NextResponse.json({ id: data.id, reviewBucket: data.review_bucket });
+  return NextResponse.json({
+    id: data.id,
+    reviewBucket: data.review_bucket,
+    draftPayload: data.draft_payload,
+  });
 }

@@ -485,6 +485,49 @@ function FastReviewWorkspace({
     }
   }
 
+  async function saveDraft(
+    draft: ReconciliationDraftRow,
+    draftPayload: Record<string, unknown>,
+    markReady: boolean,
+  ) {
+    setBusyDraftId(draft.id);
+    try {
+      const response = await fetch(`/api/reconciliation/drafts/${draft.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftPayload,
+          ...(markReady ? { reviewBucket: "ready" } : {}),
+        }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        reviewBucket?: string;
+        draftPayload?: Record<string, unknown>;
+      };
+      if (!response.ok) throw new Error(result.error ?? "Draft could not be saved.");
+      setDrafts((existing) =>
+        existing.map((item) => {
+          if (item.id !== draft.id) return item;
+          const payload = result.draftPayload ?? draftPayload;
+          return {
+            ...item,
+            reviewBucket: result.reviewBucket ?? item.reviewBucket,
+            draftPayload: payload,
+            name: typeof payload.name === "string" ? payload.name : item.name,
+            itemCount: Array.isArray(payload.items) ? payload.items.length : 0,
+            stepCount: Array.isArray(payload.steps) ? payload.steps.length : 0,
+          };
+        }),
+      );
+      setMessage(markReady ? `Saved “${draft.name}” and moved it to Ready.` : `Saved “${draft.name}”.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Draft could not be saved.");
+    } finally {
+      setBusyDraftId(null);
+    }
+  }
+
   const tabs: Array<{ bucket: ReviewStage; label: string }> = [
     { bucket: "unreviewed", label: "Keep / Edit" },
     { bucket: "needs_classification", label: "Classify edits" },
@@ -533,6 +576,7 @@ function FastReviewWorkspace({
           busy={busyDraftId === current.id}
           stage={stage}
           onMove={(bucket) => moveDraft(current, bucket)}
+          onSave={(payload, markReady) => saveDraft(current, payload, markReady)}
         />
       )}
     </section>
@@ -546,6 +590,7 @@ function DraftReviewCard({
   busy,
   stage,
   onMove,
+  onSave,
 }: {
   draft: ReconciliationDraftRow;
   position: number;
@@ -553,6 +598,7 @@ function DraftReviewCard({
   busy: boolean;
   stage: ReviewStage;
   onMove: (bucket: ReviewStage) => void;
+  onSave: (payload: Record<string, unknown>, markReady: boolean) => void;
 }) {
   const items = Array.isArray(draft.draftPayload.items)
     ? draft.draftPayload.items as Array<Record<string, unknown>>
@@ -607,7 +653,130 @@ function DraftReviewCard({
           </ol>
         </div>
       </div>
+      {(stage === "minor" || stage === "major") && (
+        <DraftQuickEditor key={draft.id} draft={draft} busy={busy} onSave={onSave} />
+      )}
     </article>
+  );
+}
+
+function DraftQuickEditor({
+  draft,
+  busy,
+  onSave,
+}: {
+  draft: ReconciliationDraftRow;
+  busy: boolean;
+  onSave: (payload: Record<string, unknown>, markReady: boolean) => void;
+}) {
+  const [payload, setPayload] = useState<Record<string, unknown>>(() => structuredClone(draft.draftPayload));
+  const items = Array.isArray(payload.items) ? payload.items as Array<Record<string, unknown>> : [];
+  const steps = Array.isArray(payload.steps) ? payload.steps as Array<Record<string, unknown>> : [];
+
+  function setField(name: string, value: unknown) {
+    setPayload((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateItem(index: number, name: string, value: unknown) {
+    setPayload((current) => {
+      const next = structuredClone(current);
+      const nextItems = next.items as Array<Record<string, unknown>>;
+      nextItems[index] = { ...nextItems[index], [name]: value };
+      return next;
+    });
+  }
+
+  function updateStep(index: number, instruction: string) {
+    setPayload((current) => {
+      const next = structuredClone(current);
+      const nextSteps = next.steps as Array<Record<string, unknown>>;
+      nextSteps[index] = { ...nextSteps[index], instruction };
+      return next;
+    });
+  }
+
+  function removeItem(index: number) {
+    setField("items", items.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function removeStep(index: number) {
+    setField("steps", steps.filter((_, stepIndex) => stepIndex !== index));
+  }
+
+  return (
+    <div className="mt-5 border-t border-zinc-800 pt-5">
+      <h4 className="text-base font-semibold">Edit this draft</h4>
+      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <CompactField label="Recipe name" value={String(payload.name ?? "")} onChange={(value) => setField("name", value)} />
+        <CompactNumber label="Base yield" value={Number(payload.baseYield ?? 0)} onChange={(value) => setField("baseYield", value)} />
+        <CompactField label="Yield unit" value={String(payload.yieldUnit ?? "")} onChange={(value) => setField("yieldUnit", value)} />
+        <div className="grid grid-cols-2 gap-2">
+          <CompactNumber label="Minimum batch" value={Number(payload.minimumBatchQuantity ?? 0)} onChange={(value) => setField("minimumBatchQuantity", value)} />
+          <CompactField label="Batch unit" value={String(payload.minimumBatchUnit ?? "")} onChange={(value) => setField("minimumBatchUnit", value)} />
+        </div>
+      </div>
+
+      <h5 className="mt-5 text-sm font-semibold text-zinc-300">Ingredient and component lines</h5>
+      <div className="mt-2 space-y-2">
+        {items.map((item, index) => (
+          <div key={String(item.id ?? index)} className="grid gap-2 border border-zinc-800 p-2 md:grid-cols-[1fr_8rem_8rem_1fr_auto]">
+            <input value={String(item.proposedName ?? "")} onChange={(event) => updateItem(index, "proposedName", event.target.value)} aria-label={`Item ${index + 1} name`} className="border border-zinc-700 bg-black px-2 py-2" />
+            <input type="number" step="any" value={Number(item.quantity ?? 0)} onChange={(event) => updateItem(index, "quantity", Number(event.target.value))} aria-label={`Item ${index + 1} quantity`} className="border border-zinc-700 bg-black px-2 py-2" />
+            <input value={String(item.unit ?? "")} onChange={(event) => updateItem(index, "unit", event.target.value)} aria-label={`Item ${index + 1} unit`} className="border border-zinc-700 bg-black px-2 py-2" />
+            <input value={String(item.preparationNote ?? "")} onChange={(event) => updateItem(index, "preparationNote", event.target.value)} placeholder="Preparation note" aria-label={`Item ${index + 1} preparation note`} className="border border-zinc-700 bg-black px-2 py-2" />
+            <button type="button" onClick={() => removeItem(index)} className="border border-red-900 px-3 text-red-300">Remove</button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => setField("items", [...items, { id: crypto.randomUUID(), kind: "ingredient", proposedName: "", quantity: 1, unit: "g" }])}
+          className="border border-zinc-700 px-3 py-2 text-sm"
+        >
+          Add ingredient
+        </button>
+      </div>
+
+      <h5 className="mt-5 text-sm font-semibold text-zinc-300">Method</h5>
+      <div className="mt-2 space-y-2">
+        {steps.map((step, index) => (
+          <div key={String(step.id ?? index)} className="grid gap-2 md:grid-cols-[auto_1fr_auto]">
+            <span className="px-2 py-2 text-zinc-500">{index + 1}</span>
+            <textarea value={String(step.instruction ?? "")} onChange={(event) => updateStep(index, event.target.value)} rows={2} className="border border-zinc-700 bg-black px-3 py-2" />
+            <button type="button" onClick={() => removeStep(index)} className="border border-red-900 px-3 text-red-300">Remove</button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => setField("steps", [...steps, { id: crypto.randomUUID(), instruction: "" }])}
+          className="border border-zinc-700 px-3 py-2 text-sm"
+        >
+          Add step
+        </button>
+      </div>
+
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
+        <button type="button" disabled={busy} onClick={() => onSave(payload, false)} className="border border-zinc-600 px-4 py-2 disabled:opacity-40">Save here</button>
+        <button type="button" disabled={busy} onClick={() => onSave(payload, true)} className="border border-emerald-600 px-5 py-2 font-semibold text-emerald-300 disabled:opacity-40">Save &amp; next</button>
+      </div>
+    </div>
+  );
+}
+
+function CompactField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="text-xs text-zinc-400">
+      <span className="mb-1 block">{label}</span>
+      <input value={value} onChange={(event) => onChange(event.target.value)} className="w-full border border-zinc-700 bg-black px-2 py-2 text-base text-white" />
+    </label>
+  );
+}
+
+function CompactNumber({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  return (
+    <label className="text-xs text-zinc-400">
+      <span className="mb-1 block">{label}</span>
+      <input type="number" step="any" value={value} onChange={(event) => onChange(Number(event.target.value))} className="w-full border border-zinc-700 bg-black px-2 py-2 text-base text-white" />
+    </label>
   );
 }
 
