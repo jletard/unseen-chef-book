@@ -681,7 +681,25 @@ function DraftQuickEditor({
     setPayload((current) => {
       const next = structuredClone(current);
       const nextItems = next.items as Array<Record<string, unknown>>;
+      const previousItem = nextItems[index];
+      const shouldSyncBatch =
+        index === 0 &&
+        current.recipeCategory === "component" &&
+        (name === "quantity" || name === "unit") &&
+        current.baseYield === previousItem.quantity &&
+        current.minimumBatchQuantity === previousItem.quantity &&
+        current.yieldUnit === previousItem.unit &&
+        current.minimumBatchUnit === previousItem.unit;
       nextItems[index] = { ...nextItems[index], [name]: value };
+      if (shouldSyncBatch) {
+        if (name === "quantity") {
+          next.baseYield = value;
+          next.minimumBatchQuantity = value;
+        } else {
+          next.yieldUnit = value;
+          next.minimumBatchUnit = value;
+        }
+      }
       return next;
     });
   }
