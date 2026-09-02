@@ -21,6 +21,19 @@ export type ReconciliationDashboard = {
   draftCounts: Record<string, number>;
   sourceCounts: Record<string, number>;
   queue: ReconciliationQueueRow[];
+  drafts: ReconciliationDraftRow[];
+};
+
+export type ReconciliationDraftRow = {
+  id: string;
+  draftState: string;
+  reviewBucket: string;
+  name: string;
+  recipeCategory: string;
+  itemCount: number;
+  stepCount: number;
+  inlineComponent: boolean;
+  draftPayload: Record<string, unknown>;
 };
 
 type ProductionItemRow = {
@@ -39,8 +52,12 @@ type TaskRow = {
 };
 
 type DraftRow = {
+  id: string;
   recipe_id: string | null;
+  draft_state: string;
   review_bucket: string;
+  draft_payload: Record<string, unknown>;
+  generation_metadata: Record<string, unknown> | null;
 };
 
 type SourceRow = { source_type: string };
@@ -61,7 +78,7 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
         .order("created_at", { ascending: true }),
       supabaseAdmin
         .from("recipe_drafts")
-        .select("recipe_id, review_bucket")
+        .select("id, recipe_id, draft_state, review_bucket, draft_payload, generation_metadata")
         .neq("draft_state", "archived"),
       supabaseAdmin.from("production_item_sources").select("source_type"),
     ]);
@@ -90,6 +107,32 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
     counts[draft.review_bucket] = (counts[draft.review_bucket] ?? 0) + 1;
     return counts;
   }, {});
+  const reconciliationDrafts = drafts
+    .filter((draft) => draft.draft_state === "ready_for_review")
+    .map<ReconciliationDraftRow>((draft) => {
+      const payload = draft.draft_payload ?? {};
+      return {
+        id: draft.id,
+        draftState: draft.draft_state,
+        reviewBucket: draft.review_bucket,
+        name: typeof payload.name === "string" ? payload.name : "Unnamed recipe",
+        recipeCategory:
+          typeof payload.recipeCategory === "string" ? payload.recipeCategory : "other",
+        itemCount: Array.isArray(payload.items) ? payload.items.length : 0,
+        stepCount: Array.isArray(payload.steps) ? payload.steps.length : 0,
+        inlineComponent: draft.generation_metadata?.inline_component === true,
+        draftPayload: payload,
+      };
+    })
+    .sort((left, right) => {
+      if (left.reviewBucket !== right.reviewBucket) {
+        return left.reviewBucket.localeCompare(right.reviewBucket);
+      }
+      if (left.inlineComponent !== right.inlineComponent) {
+        return left.inlineComponent ? 1 : -1;
+      }
+      return left.name.localeCompare(right.name);
+    });
   const sourceCounts = sources.reduce<Record<string, number>>((counts, source) => {
     counts[source.source_type] = (counts[source.source_type] ?? 0) + 1;
     return counts;
@@ -123,5 +166,6 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
     draftCounts,
     sourceCounts,
     queue,
+    drafts: reconciliationDrafts,
   };
 }

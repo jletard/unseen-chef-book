@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import SecretAIImportBox from "@/components/SecretAIImportBox/SecretAIImportBox";
-import type { ReconciliationDashboard } from "@/lib/cookbook-v2/reconciliation-data";
+import type {
+  ReconciliationDashboard,
+  ReconciliationDraftRow,
+} from "@/lib/cookbook-v2/reconciliation-data";
 import {
   createRecipePacketSchema,
   packetCurrentValues,
@@ -58,6 +62,7 @@ export default function ReconciliationDashboardV2({
 }: {
   dashboard: ReconciliationDashboard;
 }) {
+  const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [kindFilter, setKindFilter] = useState("all");
   const [activityFilter, setActivityFilter] = useState<"active" | "all">("active");
@@ -66,6 +71,7 @@ export default function ReconciliationDashboardV2({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [batches, setBatches] = useState<BatchStatus[]>([]);
+  const [drafts, setDrafts] = useState(dashboard.drafts);
   const [activeBatch, setActiveBatch] = useState<{
     id: string;
     name: string;
@@ -191,6 +197,7 @@ export default function ReconciliationDashboardV2({
         `${result.importedComponents ?? 0} inline component drafts atomically.`,
     );
     await loadBatches();
+    router.refresh();
   }
 
   async function loadBatches() {
@@ -236,7 +243,10 @@ export default function ReconciliationDashboardV2({
         <SummaryCard label="Production items" value={dashboard.totalProductionItems} />
         <SummaryCard label="Missing recipes" value={dashboard.missingRecipes} warning />
         <SummaryCard label="Identity decisions" value={dashboard.openIdentityDecisions} warning />
-        <SummaryCard label="Drafts ready" value={dashboard.draftCounts.ready ?? 0} />
+        <SummaryCard
+          label="Drafts to review"
+          value={drafts.filter((draft) => draft.reviewBucket !== "ready").length}
+        />
       </div>
 
       <section className="mt-8 border border-zinc-800 bg-zinc-950 p-4">
@@ -334,6 +344,8 @@ export default function ReconciliationDashboardV2({
         </section>
       )}
 
+      <FastReviewWorkspace drafts={drafts} setDrafts={setDrafts} setMessage={setMessage} />
+
       <section className="mt-8">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -427,6 +439,175 @@ export default function ReconciliationDashboardV2({
         </div>
       </section>
     </>
+  );
+}
+
+type ReviewStage = "unreviewed" | "needs_classification" | "minor" | "major" | "ready";
+
+function FastReviewWorkspace({
+  drafts,
+  setDrafts,
+  setMessage,
+}: {
+  drafts: ReconciliationDraftRow[];
+  setDrafts: React.Dispatch<React.SetStateAction<ReconciliationDraftRow[]>>;
+  setMessage: React.Dispatch<React.SetStateAction<string>>;
+}) {
+  const [stage, setStage] = useState<ReviewStage>(
+    drafts.some((draft) => draft.reviewBucket === "unreviewed") ? "unreviewed" : "needs_classification",
+  );
+  const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
+  const stageDrafts = drafts.filter((draft) => draft.reviewBucket === stage);
+  const current = stageDrafts[0];
+
+  async function moveDraft(draft: ReconciliationDraftRow, reviewBucket: ReviewStage) {
+    setBusyDraftId(draft.id);
+    try {
+      const response = await fetch(`/api/reconciliation/drafts/${draft.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewBucket }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Draft could not be moved.");
+      setDrafts((existing) =>
+        existing.map((item) => item.id === draft.id ? { ...item, reviewBucket } : item),
+      );
+      setMessage(
+        reviewBucket === "ready"
+          ? `Kept “${draft.name}” and moved it to Ready.`
+          : `Moved “${draft.name}” to ${reviewBucket.replaceAll("_", " ")}.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Draft could not be moved.");
+    } finally {
+      setBusyDraftId(null);
+    }
+  }
+
+  const tabs: Array<{ bucket: ReviewStage; label: string }> = [
+    { bucket: "unreviewed", label: "Keep / Edit" },
+    { bucket: "needs_classification", label: "Classify edits" },
+    { bucket: "minor", label: "Minor" },
+    { bucket: "major", label: "Major" },
+    { bucket: "ready", label: "Ready" },
+  ];
+
+  return (
+    <section className="mt-6 border border-zinc-800 bg-zinc-950 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Fast draft review</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            First pass: Keep or Edit. Second pass: sort edits into Minor or Major.
+          </p>
+        </div>
+        <div className="text-sm text-zinc-400">{drafts.length} reviewable drafts</div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {tabs.map((tab) => {
+          const count = drafts.filter((draft) => draft.reviewBucket === tab.bucket).length;
+          return (
+            <button
+              key={tab.bucket}
+              type="button"
+              onClick={() => setStage(tab.bucket)}
+              className={stage === tab.bucket ? "border border-blue-500 bg-blue-950/30 px-3 py-2 text-sm" : "border border-zinc-700 px-3 py-2 text-sm text-zinc-300"}
+            >
+              {tab.label} ({count})
+            </button>
+          );
+        })}
+      </div>
+
+      {!current ? (
+        <p className="mt-4 border border-zinc-800 p-4 text-sm text-emerald-400">
+          Nothing in this pile.
+        </p>
+      ) : (
+        <DraftReviewCard
+          draft={current}
+          position={1}
+          total={stageDrafts.length}
+          busy={busyDraftId === current.id}
+          stage={stage}
+          onMove={(bucket) => moveDraft(current, bucket)}
+        />
+      )}
+    </section>
+  );
+}
+
+function DraftReviewCard({
+  draft,
+  position,
+  total,
+  busy,
+  stage,
+  onMove,
+}: {
+  draft: ReconciliationDraftRow;
+  position: number;
+  total: number;
+  busy: boolean;
+  stage: ReviewStage;
+  onMove: (bucket: ReviewStage) => void;
+}) {
+  const items = Array.isArray(draft.draftPayload.items)
+    ? draft.draftPayload.items as Array<Record<string, unknown>>
+    : [];
+  const steps = Array.isArray(draft.draftPayload.steps)
+    ? draft.draftPayload.steps as Array<Record<string, unknown>>
+    : [];
+
+  return (
+    <article className="mt-4 border border-zinc-700 bg-black p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-xs uppercase text-zinc-500">{position} of {total}</div>
+          <h3 className="mt-1 text-xl font-semibold">{draft.name}</h3>
+          <div className="mt-1 text-sm capitalize text-zinc-400">
+            {draft.inlineComponent ? "Inline component" : "Production recipe"} · {draft.recipeCategory} · {draft.itemCount} items · {draft.stepCount} steps
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {stage === "unreviewed" && (
+            <>
+              <button disabled={busy} onClick={() => onMove("ready")} className="border border-emerald-600 px-5 py-2 font-semibold text-emerald-300 disabled:opacity-40">Keep</button>
+              <button disabled={busy} onClick={() => onMove("needs_classification")} className="border border-amber-600 px-5 py-2 font-semibold text-amber-300 disabled:opacity-40">Edit</button>
+            </>
+          )}
+          {stage === "needs_classification" && (
+            <>
+              <button disabled={busy} onClick={() => onMove("minor")} className="border border-amber-700 px-5 py-2 font-semibold text-amber-300 disabled:opacity-40">Minor</button>
+              <button disabled={busy} onClick={() => onMove("major")} className="border border-red-700 px-5 py-2 font-semibold text-red-300 disabled:opacity-40">Major</button>
+              <button disabled={busy} onClick={() => onMove("ready")} className="border border-emerald-700 px-3 py-2 text-sm text-emerald-300 disabled:opacity-40">Actually keep</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div>
+          <h4 className="text-sm font-semibold text-zinc-300">Ingredients and components</h4>
+          <div className="mt-2 divide-y divide-zinc-900 border border-zinc-800">
+            {items.map((item, index) => (
+              <div key={index} className="flex justify-between gap-4 px-3 py-2 text-sm">
+                <span>{String(item.proposedName ?? "Unnamed item")}</span>
+                <span className="whitespace-nowrap text-zinc-400">{String(item.quantity ?? "")} {String(item.unit ?? "")}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <h4 className="text-sm font-semibold text-zinc-300">Method</h4>
+          <ol className="mt-2 list-decimal space-y-2 border border-zinc-800 px-8 py-3 text-sm text-zinc-300">
+            {steps.map((step, index) => <li key={index}>{String(step.instruction ?? "")}</li>)}
+          </ol>
+        </div>
+      </div>
+    </article>
   );
 }
 

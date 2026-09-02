@@ -12,7 +12,12 @@ import {
 export default async function ReconciliationPage() {
   if (process.env.COOKBOOK_V2_RECONCILIATION_ENABLED !== "false") {
     const dashboard = await getReconciliationDashboardV2();
-    return <ReconciliationDashboardV2 dashboard={dashboard} />;
+    return (
+      <ReconciliationDashboardV2
+        key={dashboard.drafts.map((draft) => `${draft.id}:${draft.reviewBucket}`).join("|")}
+        dashboard={dashboard}
+      />
+    );
   }
 
   const [items, recipes, links] = await Promise.all([
