@@ -454,14 +454,52 @@ function FastReviewWorkspace({
   setDrafts: React.Dispatch<React.SetStateAction<ReconciliationDraftRow[]>>;
   setMessage: React.Dispatch<React.SetStateAction<string>>;
 }) {
+  const router = useRouter();
   const [stage, setStage] = useState<ReviewStage>(
     drafts.some((draft) => draft.reviewBucket === "unreviewed") ? "unreviewed" : "needs_classification",
   );
   const [reviewOffset, setReviewOffset] = useState(0);
   const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
+  const [finalizationPreview, setFinalizationPreview] = useState<{
+    readyCount: number;
+    newIngredients: string[];
+    ambiguousIngredients: string[];
+    dependencyBlockers: string[];
+  } | null>(null);
+  const [finalizationBusy, setFinalizationBusy] = useState(false);
   const stageDrafts = drafts.filter((draft) => draft.reviewBucket === stage);
   const currentIndex = stageDrafts.length ? reviewOffset % stageDrafts.length : 0;
   const current = stageDrafts[currentIndex];
+
+  async function previewFinalization() {
+    setFinalizationBusy(true);
+    try {
+      const response = await fetch("/api/reconciliation/finalize", { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Finalization preview failed.");
+      setFinalizationPreview(result);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Finalization preview failed.");
+    } finally {
+      setFinalizationBusy(false);
+    }
+  }
+
+  async function finalizeReady() {
+    setFinalizationBusy(true);
+    try {
+      const response = await fetch("/api/reconciliation/finalize", { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Ready drafts could not be finalized.");
+      setFinalizationPreview(null);
+      setMessage(`Finalized ${result.finalizedCount ?? 0} approved recipe versions.`);
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Ready drafts could not be finalized.");
+    } finally {
+      setFinalizationBusy(false);
+    }
+  }
 
   async function moveDraft(draft: ReconciliationDraftRow, reviewBucket: ReviewStage) {
     setBusyDraftId(draft.id);
@@ -557,6 +595,61 @@ function FastReviewWorkspace({
         </div>
         <div className="text-sm text-zinc-400">{drafts.length} reviewable drafts</div>
       </div>
+
+      {drafts.some((draft) => draft.reviewBucket === "ready") && (
+        <div className="mt-4 border border-emerald-900 bg-emerald-950/10 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-medium">Finalize Ready recipes</div>
+              <div className="mt-1 text-xs text-zinc-400">
+                Preview identity changes, then create immutable approved versions and close their reconciliation tasks.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={previewFinalization}
+              disabled={finalizationBusy}
+              className="border border-emerald-700 px-4 py-2 font-medium text-emerald-300 disabled:opacity-40"
+            >
+              {finalizationBusy ? "Checking…" : "Preview finalization"}
+            </button>
+          </div>
+          {finalizationPreview && (
+            <div className="mt-3 border-t border-zinc-800 pt-3 text-sm">
+              <div>{finalizationPreview.readyCount} Ready drafts will be finalized dependency-first.</div>
+              <div className="mt-2 text-zinc-300">
+                {finalizationPreview.newIngredients.length} exact-new ingredient identities will be created.
+              </div>
+              {finalizationPreview.newIngredients.length > 0 && (
+                <div className="mt-1 max-h-32 overflow-y-auto text-xs text-zinc-400">
+                  {finalizationPreview.newIngredients.join(" · ")}
+                </div>
+              )}
+              {finalizationPreview.ambiguousIngredients.length > 0 && (
+                <div className="mt-2 text-red-300">
+                  Ambiguous ingredients: {finalizationPreview.ambiguousIngredients.join(" · ")}
+                </div>
+              )}
+              {finalizationPreview.dependencyBlockers.length > 0 && (
+                <div className="mt-2 text-red-300">
+                  Missing approved components: {finalizationPreview.dependencyBlockers.join(" · ")}
+                </div>
+              )}
+              <div className="mt-3 flex justify-end gap-2">
+                <button type="button" onClick={() => setFinalizationPreview(null)} className="border border-zinc-700 px-3 py-2">Cancel</button>
+                <button
+                  type="button"
+                  onClick={finalizeReady}
+                  disabled={finalizationBusy || finalizationPreview.ambiguousIngredients.length > 0 || finalizationPreview.dependencyBlockers.length > 0}
+                  className="border border-emerald-600 px-4 py-2 font-semibold text-emerald-300 disabled:opacity-40"
+                >
+                  Confirm &amp; finalize
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {tabs.map((tab) => {
