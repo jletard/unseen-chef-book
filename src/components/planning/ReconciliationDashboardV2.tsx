@@ -1,8 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import SecretAIImportBox from "@/components/SecretAIImportBox/SecretAIImportBox";
 import type { ReconciliationDashboard } from "@/lib/cookbook-v2/reconciliation-data";
+import {
+  createRecipePacketSchema,
+  packetCurrentValues,
+  SECRET_AI_PACKET_SIZE,
+  type SecretAIRecipeRequest,
+  type SecretAIRecipeResult,
+} from "@/lib/cookbook-v2/secret-ai-batch";
 
 const kindLabels: Record<string, string> = {
   menu_item: "Menu item",
@@ -18,6 +26,14 @@ type BatchResult = {
   jobCount?: number;
   alreadyExisted?: boolean;
   error?: string;
+  jobs?: Array<{
+    id: string;
+    productionItemId: string;
+    input: {
+      production_item?: { name?: string; kind?: string };
+      sources?: unknown[];
+    };
+  }>;
 };
 
 type BatchStatus = {
@@ -26,6 +42,15 @@ type BatchStatus = {
   status: string;
   requestedCount: number;
   counts: Record<string, number>;
+  jobs: Array<{
+    id: string;
+    status: string;
+    productionItemId: string;
+    input: {
+      production_item?: { name?: string; kind?: string };
+      sources?: unknown[];
+    };
+  }>;
 };
 
 export default function ReconciliationDashboardV2({
@@ -41,6 +66,12 @@ export default function ReconciliationDashboardV2({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [batches, setBatches] = useState<BatchStatus[]>([]);
+  const [activeBatch, setActiveBatch] = useState<{
+    id: string;
+    name: string;
+    packets: SecretAIRecipeRequest[][];
+    completedPackets: Set<number>;
+  } | null>(null);
 
   const kinds = useMemo(
     () => Array.from(new Set(dashboard.queue.map((row) => row.kind))).sort(),
@@ -54,6 +85,12 @@ export default function ReconciliationDashboardV2({
       return !normalizedSearch || row.name.toLocaleLowerCase().includes(normalizedSearch);
     });
   }, [activityFilter, dashboard.queue, kindFilter, search]);
+
+  useEffect(() => {
+    void loadBatches().catch((error) => {
+      setMessage(error instanceof Error ? error.message : "Batch status could not be loaded.");
+    });
+  }, []);
 
   function toggle(productionItemId: string) {
     setMessage("");
@@ -104,9 +141,26 @@ export default function ReconciliationDashboardV2({
       }
 
       setSelectedIds(new Set());
+      const requests = (result.jobs ?? []).map((job) => ({
+        jobId: job.id,
+        productionItemId: job.productionItemId,
+        name: job.input.production_item?.name ?? "Unnamed production item",
+        kind: job.input.production_item?.kind ?? "other",
+        sources: job.input.sources ?? [],
+      }));
+      const packets = Array.from(
+        { length: Math.ceil(requests.length / SECRET_AI_PACKET_SIZE) },
+        (_, index) => requests.slice(index * SECRET_AI_PACKET_SIZE, (index + 1) * SECRET_AI_PACKET_SIZE),
+      );
+      setActiveBatch({
+        id: result.batchId ?? "",
+        name: batchName,
+        packets,
+        completedPackets: new Set(),
+      });
       setMessage(
-        `${result.jobCount ?? 0} recipe jobs queued in “${batchName}”. ` +
-          "The generation worker is the next connection; no browser waiting is required.",
+        `${result.jobCount ?? 0} recipes prepared as ${packets.length} Secret AI+ ` +
+          `${packets.length === 1 ? "packet" : "packets"}. Copy, ask ChatGPT, and paste each result below.`,
       );
       await loadBatches();
     } catch (error) {
@@ -114,6 +168,29 @@ export default function ReconciliationDashboardV2({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function importPacket(packetIndex: number, values: Record<string, unknown>) {
+    if (!activeBatch) throw new Error("The batch is no longer active.");
+    const recipes = values.recipes as SecretAIRecipeResult[];
+    const response = await fetch(`/api/reconciliation/batches/${activeBatch.id}/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipes }),
+    });
+    const result = (await response.json()) as { importedJobs?: number; importedComponents?: number; error?: string };
+    if (!response.ok) throw new Error(result.error ?? "Packet could not be imported.");
+    setActiveBatch((current) => {
+      if (!current) return current;
+      const completedPackets = new Set(current.completedPackets);
+      completedPackets.add(packetIndex);
+      return { ...current, completedPackets };
+    });
+    setMessage(
+      `Imported ${result.importedJobs ?? recipes.length} recipe drafts and ` +
+        `${result.importedComponents ?? 0} inline component drafts atomically.`,
+    );
+    await loadBatches();
   }
 
   async function loadBatches() {
@@ -126,6 +203,24 @@ export default function ReconciliationDashboardV2({
       throw new Error(result.error ?? "Batch status could not be loaded.");
     }
     setBatches(result.batches ?? []);
+  }
+
+  function resumeBatch(batch: BatchStatus) {
+    const requests = batch.jobs
+      .filter((job) => ["queued", "failed", "needs_input"].includes(job.status))
+      .map((job) => ({
+        jobId: job.id,
+        productionItemId: job.productionItemId,
+        name: job.input.production_item?.name ?? "Unnamed production item",
+        kind: job.input.production_item?.kind ?? "other",
+        sources: job.input.sources ?? [],
+      }));
+    const packets = Array.from(
+      { length: Math.ceil(requests.length / SECRET_AI_PACKET_SIZE) },
+      (_, index) => requests.slice(index * SECRET_AI_PACKET_SIZE, (index + 1) * SECRET_AI_PACKET_SIZE),
+    );
+    setActiveBatch({ id: batch.id, name: batch.name, packets, completedPackets: new Set() });
+    setMessage(`Resumed ${requests.length} recipes in ${packets.length} Secret AI+ ${packets.length === 1 ? "packet" : "packets"}.`);
   }
 
   return (
@@ -186,18 +281,65 @@ export default function ReconciliationDashboardV2({
                 <div className="mt-2 text-zinc-400">
                   {batch.requestedCount} jobs · {batch.counts.ready ?? 0} ready · {batch.counts.failed ?? 0} failed · {batch.counts.queued ?? 0} queued
                 </div>
+                {batch.jobs.some((job) => ["queued", "failed", "needs_input"].includes(job.status)) && (
+                  <button
+                    type="button"
+                    onClick={() => resumeBatch(batch)}
+                    className="mt-3 border border-blue-700 px-3 py-1 text-xs"
+                  >
+                    Continue Secret AI+
+                  </button>
+                )}
               </div>
             ))}
           </div>
         )}
       </section>
 
+      {activeBatch && (
+        <section className="mt-6 border border-blue-900 bg-blue-950/10 p-4">
+          <h2 className="text-lg font-semibold">Secret AI+ · {activeBatch.name}</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            This is one logical batch split into response-sized packets. Each successful paste creates all
+            parent and inline component drafts together; it does not click through the old recipe form.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {activeBatch.packets.map((packet, packetIndex) => {
+              const complete = activeBatch.completedPackets.has(packetIndex);
+              return (
+                <div key={packetIndex} className="border border-zinc-800 bg-black p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium">Packet {packetIndex + 1} of {activeBatch.packets.length}</div>
+                      <div className="mt-1 text-xs text-zinc-500">
+                        {packet.map((request) => request.name).join(" · ")}
+                      </div>
+                    </div>
+                    {complete ? (
+                      <span className="text-sm text-emerald-400">Imported</span>
+                    ) : (
+                      <SecretAIImportBox
+                        formSchema={createRecipePacketSchema(packet.map((request) => request.jobId))}
+                        currentValues={packetCurrentValues(packet)}
+                        onImport={(values) => importPacket(packetIndex, values)}
+                        successMessage="Packet imported into the fast review queue."
+                        closeAfterImport
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <section className="mt-8">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">Reconciliation candidates</h2>
             <p className="mt-1 text-sm text-zinc-400">
-              Select up to 100 items for one isolated generation batch.
+              Select up to 100 items for one isolated Secret AI+ batch.
             </p>
           </div>
           <div className="text-sm text-zinc-400">

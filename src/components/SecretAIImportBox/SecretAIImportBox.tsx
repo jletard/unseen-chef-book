@@ -327,7 +327,7 @@ function buildFieldInstructions(
     return lines.join("\n");
 }
 
-function buildAIInstructions(
+export function buildAIInstructions(
     formSchema: SecretAIFormSchema,
     currentValues: Record<string, unknown>,
 ): string {
@@ -486,7 +486,7 @@ function validateFieldValue(
     }
 }
 
-function validateImportedValues(
+export function validateImportedValues(
     value: unknown,
     formSchema: SecretAIFormSchema,
 ): Record<string, unknown> {
@@ -548,11 +548,13 @@ export default function SecretAIImportBox({
             if (closeAfterImport) {
                 setIsOpen(false);
             }
-        } catch {
+        } catch (error) {
             setHasError(true);
 
             setMessage(
-                "AI gave us bad JSON. Yell at it and try again. Your form has not been changed.",
+                error instanceof Error
+                    ? error.message
+                    : "AI gave us bad JSON. Yell at it and try again. Your form has not been changed.",
             );
         }
     }

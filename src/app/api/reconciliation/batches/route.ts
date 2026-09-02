@@ -17,7 +17,15 @@ type BatchRow = {
   status: string;
   requested_count: number;
   created_at: string;
-  recipe_intake_jobs: Array<{ status: string }> | null;
+  recipe_intake_jobs: Array<{
+    id: string;
+    status: string;
+    production_item_id: string;
+    input_payload: {
+      production_item?: { name?: string; kind?: string };
+      sources?: unknown[];
+    };
+  }> | null;
 };
 
 export async function GET() {
@@ -32,7 +40,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("recipe_intake_batches")
-    .select("id, name, status, requested_count, created_at, recipe_intake_jobs(status)")
+    .select("id, name, status, requested_count, created_at, recipe_intake_jobs(id, status, production_item_id, input_payload)")
     .order("created_at", { ascending: false })
     .limit(10);
 
@@ -59,6 +67,12 @@ export async function GET() {
       requestedCount: batch.requested_count,
       createdAt: batch.created_at,
       counts,
+      jobs: (batch.recipe_intake_jobs ?? []).map((job) => ({
+        id: job.id,
+        status: job.status,
+        productionItemId: job.production_item_id,
+        input: job.input_payload,
+      })),
     };
   });
 
@@ -131,11 +145,26 @@ export async function POST(request: Request) {
     );
   }
 
+  const { data: jobs, error: jobsError } = await supabase
+    .from("recipe_intake_jobs")
+    .select("id, production_item_id, input_payload")
+    .eq("batch_id", result.batch_id)
+    .order("created_at", { ascending: true });
+
+  if (jobsError) {
+    return NextResponse.json({ error: jobsError.message }, { status: 500 });
+  }
+
   return NextResponse.json(
     {
       batchId: result.batch_id,
       jobCount: result.job_count,
       alreadyExisted: result.already_existed,
+      jobs: (jobs ?? []).map((job) => ({
+        id: job.id,
+        productionItemId: job.production_item_id,
+        input: job.input_payload,
+      })),
     },
     { status: result.already_existed ? 200 : 201 },
   );
