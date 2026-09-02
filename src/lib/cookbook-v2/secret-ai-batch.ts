@@ -11,6 +11,7 @@ export const SECRET_AI_PACKET_SIZE = 10;
 const ingredientLine: SecretAIFormField = {
   type: "object",
   fields: {
+    id: { type: "string" },
     kind: { type: "enum", values: ["ingredient", "recipe"], required: true },
     proposedName: {
       type: "string",
@@ -26,6 +27,7 @@ const ingredientLine: SecretAIFormField = {
 const step: SecretAIFormField = {
   type: "object",
   fields: {
+    id: { type: "string" },
     instruction: { type: "string", required: true },
     durationMinutes: { type: "number" },
     temperatureValue: { type: "number" },
@@ -39,6 +41,7 @@ const step: SecretAIFormField = {
 const equipment: SecretAIFormField = {
   type: "object",
   fields: {
+    id: { type: "string" },
     name: { type: "string", required: true },
     quantity: { type: "number" },
     note: { type: "string" },
@@ -111,6 +114,15 @@ export function createRecipePacketSchema(jobIds: string[]): SecretAIFormSchema {
         },
       },
     },
+  };
+}
+
+export function createSingleRecipeDraftSchema(recipeName: string): SecretAIFormSchema {
+  return {
+    name: `Major recipe revision: ${recipeName}`,
+    description:
+      "Discuss the recipe with the chef and make the requested substantive corrections. Return the complete corrected recipe draft, not a patch. Preserve app-owned id fields when they are present. Purchased proteins should use lb or oz; dry ingredients and seasonings should use metric weight; cups, quarts, and fluid ounces are liquid-only. Keep distinct ingredient identities distinct. A prepared sauce, marinade, side, or other reusable preparation must be represented as a recipe item rather than flattened into purchased ingredients.",
+    fields: recipeFields,
   };
 }
 

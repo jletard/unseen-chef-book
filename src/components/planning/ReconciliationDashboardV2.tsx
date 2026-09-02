@@ -10,6 +10,7 @@ import type {
 } from "@/lib/cookbook-v2/reconciliation-data";
 import {
   createRecipePacketSchema,
+  createSingleRecipeDraftSchema,
   packetCurrentValues,
   SECRET_AI_PACKET_SIZE,
   type SecretAIRecipeRequest,
@@ -614,7 +615,7 @@ function DraftReviewCard({
   busy: boolean;
   stage: ReviewStage;
   onMove: (bucket: ReviewStage) => void;
-  onSave: (payload: Record<string, unknown>, markReady: boolean) => void;
+  onSave: (payload: Record<string, unknown>, markReady: boolean) => Promise<void>;
   onPrevious: () => void;
   onNext: () => void;
 }) {
@@ -655,6 +656,15 @@ function DraftReviewCard({
               <button disabled={busy} onClick={() => onMove("ready")} className="border border-emerald-700 px-3 py-2 text-sm text-emerald-300 disabled:opacity-40">Actually keep</button>
             </>
           )}
+          {stage === "major" && (
+            <SecretAIImportBox
+              formSchema={createSingleRecipeDraftSchema(draft.name)}
+              currentValues={draft.draftPayload}
+              onImport={(values) => onSave(ensureDraftIds(values), false)}
+              successMessage="Major AI revision imported. Review it, then save and advance."
+              closeAfterImport
+            />
+          )}
         </div>
       </div>
 
@@ -684,6 +694,23 @@ function DraftReviewCard({
   );
 }
 
+function ensureDraftIds(payload: Record<string, unknown>) {
+  const withIds = (value: unknown) =>
+    Array.isArray(value)
+      ? value.map((entry) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
+          const item = entry as Record<string, unknown>;
+          return { ...item, id: typeof item.id === "string" && item.id ? item.id : crypto.randomUUID() };
+        })
+      : [];
+  return {
+    ...payload,
+    equipment: withIds(payload.equipment),
+    items: withIds(payload.items),
+    steps: withIds(payload.steps),
+  };
+}
+
 function DraftQuickEditor({
   draft,
   busy,
@@ -691,7 +718,7 @@ function DraftQuickEditor({
 }: {
   draft: ReconciliationDraftRow;
   busy: boolean;
-  onSave: (payload: Record<string, unknown>, markReady: boolean) => void;
+  onSave: (payload: Record<string, unknown>, markReady: boolean) => Promise<void>;
 }) {
   const [payload, setPayload] = useState<Record<string, unknown>>(() => structuredClone(draft.draftPayload));
   const items = Array.isArray(payload.items) ? payload.items as Array<Record<string, unknown>> : [];
