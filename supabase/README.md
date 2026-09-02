@@ -16,8 +16,9 @@ do not replace or delete the legacy tables.
    `Garlic Roasted Broccoli`.
 7. Assign the initial owner role using the authenticated user's UUID in the
    Supabase dashboard. Do not identify the owner by display name.
-8. Keep `COOKBOOK_V2_RECONCILIATION_ENABLED=false` until the same sequence has
-   succeeded against the intended target and the initial owner can read it.
+8. After the same sequence succeeds against the intended target and the initial
+   owner can read it, enable `COOKBOOK_V2_RECONCILIATION_ENABLED`. Set it to
+   `false` for an immediate fallback to the legacy page.
 
 ## Initial owner bootstrap
 

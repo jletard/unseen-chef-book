@@ -10,7 +10,7 @@ import {
 } from "@/lib/recipe-data";
 
 export default async function ReconciliationPage() {
-  if (process.env.COOKBOOK_V2_RECONCILIATION_ENABLED === "true") {
+  if (process.env.COOKBOOK_V2_RECONCILIATION_ENABLED !== "false") {
     const dashboard = await getReconciliationDashboardV2();
     return <ReconciliationDashboardV2 dashboard={dashboard} />;
   }
