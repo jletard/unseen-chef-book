@@ -35,6 +35,8 @@ export const yieldKinds = [
 export const recipeUnits = [
   "serving",
   "each",
+  "oz",
+  "lb",
   "fl_oz",
   "cup",
   "quart",
