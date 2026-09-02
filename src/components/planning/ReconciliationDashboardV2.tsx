@@ -701,6 +701,21 @@ function DraftQuickEditor({
     setPayload((current) => ({ ...current, [name]: value }));
   }
 
+  function normalizedPayloadForSave() {
+    if (!draft.bulkProtein || items.length === 0) return payload;
+    const primaryProtein = items[0];
+    const quantity = primaryProtein.quantity;
+    const unit = primaryProtein.unit;
+    if (typeof quantity !== "number" || typeof unit !== "string" || !unit.trim()) return payload;
+    return {
+      ...payload,
+      baseYield: quantity,
+      yieldUnit: unit,
+      minimumBatchQuantity: quantity,
+      minimumBatchUnit: unit,
+    };
+  }
+
   function updateItem(index: number, name: string, value: unknown) {
     setPayload((current) => {
       const next = structuredClone(current);
@@ -797,8 +812,13 @@ function DraftQuickEditor({
       </div>
 
       <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <button type="button" disabled={busy} onClick={() => onSave(payload, false)} className="border border-zinc-600 px-4 py-2 disabled:opacity-40">Save here</button>
-        <button type="button" disabled={busy} onClick={() => onSave(payload, true)} className="border border-emerald-600 px-5 py-2 font-semibold text-emerald-300 disabled:opacity-40">Save &amp; next</button>
+        {draft.bulkProtein && (
+          <span className="mr-auto self-center text-xs text-blue-300">
+            Batch and yield will match the primary protein line.
+          </span>
+        )}
+        <button type="button" disabled={busy} onClick={() => onSave(normalizedPayloadForSave(), false)} className="border border-zinc-600 px-4 py-2 disabled:opacity-40">Save here</button>
+        <button type="button" disabled={busy} onClick={() => onSave(normalizedPayloadForSave(), true)} className="border border-emerald-600 px-5 py-2 font-semibold text-emerald-300 disabled:opacity-40">Save &amp; next</button>
       </div>
     </div>
   );

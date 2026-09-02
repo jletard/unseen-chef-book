@@ -33,6 +33,7 @@ export type ReconciliationDraftRow = {
   itemCount: number;
   stepCount: number;
   inlineComponent: boolean;
+  bulkProtein: boolean;
   draftPayload: Record<string, unknown>;
 };
 
@@ -58,6 +59,9 @@ type DraftRow = {
   review_bucket: string;
   draft_payload: Record<string, unknown>;
   generation_metadata: Record<string, unknown> | null;
+  source_payload: {
+    production_item?: { kind?: string };
+  } | null;
 };
 
 type SourceRow = { source_type: string };
@@ -78,7 +82,7 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
         .order("created_at", { ascending: true }),
       supabaseAdmin
         .from("recipe_drafts")
-        .select("id, recipe_id, draft_state, review_bucket, draft_payload, generation_metadata")
+        .select("id, recipe_id, draft_state, review_bucket, draft_payload, generation_metadata, source_payload")
         .neq("draft_state", "archived"),
       supabaseAdmin.from("production_item_sources").select("source_type"),
     ]);
@@ -121,6 +125,7 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
         itemCount: Array.isArray(payload.items) ? payload.items.length : 0,
         stepCount: Array.isArray(payload.steps) ? payload.steps.length : 0,
         inlineComponent: draft.generation_metadata?.inline_component === true,
+        bulkProtein: draft.source_payload?.production_item?.kind === "bulk_protein",
         draftPayload: payload,
       };
     })
