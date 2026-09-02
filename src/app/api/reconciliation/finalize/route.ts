@@ -141,14 +141,12 @@ export async function POST() {
         { status: 409 },
       );
     }
-    const finalized: unknown[] = [];
-    for (const draft of dependencyOrder(drafts)) {
-      const { data, error } = await supabase.rpc("finalize_ready_recipe_draft", {
-        ready_draft_id: draft.id,
-      });
-      if (error) throw new Error(error.message);
-      finalized.push(data);
-    }
+    const orderedDrafts = dependencyOrder(drafts);
+    const { data, error } = await supabase.rpc("finalize_ready_recipe_drafts", {
+      ready_draft_ids: orderedDrafts.map((draft) => draft.id),
+    });
+    if (error) throw new Error(error.message);
+    const finalized = Array.isArray(data) ? data : [];
     return NextResponse.json({ finalizedCount: finalized.length, finalized });
   } catch (error) {
     return NextResponse.json(

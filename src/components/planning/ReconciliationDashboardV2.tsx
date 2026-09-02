@@ -496,6 +496,18 @@ function FastReviewWorkspace({
       const response = await fetch("/api/reconciliation/finalize", { method: "POST" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Ready drafts could not be finalized.");
+      const finalizedDraftIds = new Set(
+        Array.isArray(result.finalized)
+          ? result.finalized
+              .map((item: unknown) =>
+                typeof item === "object" && item !== null && "draft_id" in item
+                  ? String(item.draft_id)
+                  : "",
+              )
+              .filter(Boolean)
+          : [],
+      );
+      setDrafts((existing) => existing.filter((draft) => !finalizedDraftIds.has(draft.id)));
       setFinalizationPreview(null);
       setMessage(`Finalized ${result.finalizedCount ?? 0} approved recipe versions.`);
       router.refresh();
