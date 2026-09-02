@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export type ReconciliationQueueRow = {
   id: string;
+  productionItemId: string;
   name: string;
   kind: string;
   active: boolean;
@@ -101,6 +102,7 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
     return [
       {
         id: task.id,
+        productionItemId: productionItem.id,
         name: productionItem.name,
         kind: productionItem.kind,
         active: productionItem.active,
