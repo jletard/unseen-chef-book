@@ -125,7 +125,9 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
         itemCount: Array.isArray(payload.items) ? payload.items.length : 0,
         stepCount: Array.isArray(payload.steps) ? payload.steps.length : 0,
         inlineComponent: draft.generation_metadata?.inline_component === true,
-        bulkProtein: draft.source_payload?.production_item?.kind === "bulk_protein",
+        bulkProtein:
+          draft.generation_metadata?.inline_component !== true &&
+          draft.source_payload?.production_item?.kind === "bulk_protein",
         draftPayload: payload,
       };
     })
