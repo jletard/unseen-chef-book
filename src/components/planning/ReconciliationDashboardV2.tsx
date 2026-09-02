@@ -467,19 +467,23 @@ function FastReviewWorkspace({
     dependencyBlockers: string[];
   } | null>(null);
   const [finalizationBusy, setFinalizationBusy] = useState(false);
+  const [finalizationError, setFinalizationError] = useState("");
   const stageDrafts = drafts.filter((draft) => draft.reviewBucket === stage);
   const currentIndex = stageDrafts.length ? reviewOffset % stageDrafts.length : 0;
   const current = stageDrafts[currentIndex];
 
   async function previewFinalization() {
     setFinalizationBusy(true);
+    setFinalizationError("");
     try {
       const response = await fetch("/api/reconciliation/finalize", { cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Finalization preview failed.");
       setFinalizationPreview(result);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Finalization preview failed.");
+      const errorMessage = error instanceof Error ? error.message : "Finalization preview failed.";
+      setFinalizationError(errorMessage);
+      setMessage(errorMessage);
     } finally {
       setFinalizationBusy(false);
     }
@@ -487,6 +491,7 @@ function FastReviewWorkspace({
 
   async function finalizeReady() {
     setFinalizationBusy(true);
+    setFinalizationError("");
     try {
       const response = await fetch("/api/reconciliation/finalize", { method: "POST" });
       const result = await response.json();
@@ -495,7 +500,9 @@ function FastReviewWorkspace({
       setMessage(`Finalized ${result.finalizedCount ?? 0} approved recipe versions.`);
       router.refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Ready drafts could not be finalized.");
+      const errorMessage = error instanceof Error ? error.message : "Ready drafts could not be finalized.";
+      setFinalizationError(errorMessage);
+      setMessage(errorMessage);
     } finally {
       setFinalizationBusy(false);
     }
@@ -614,6 +621,11 @@ function FastReviewWorkspace({
               {finalizationBusy ? "Checking…" : "Preview finalization"}
             </button>
           </div>
+          {finalizationError && (
+            <div className="mt-3 border border-red-900 bg-red-950/20 p-3 text-sm text-red-300">
+              Finalization failed: {finalizationError}
+            </div>
+          )}
           {finalizationPreview && (
             <div className="mt-3 border-t border-zinc-800 pt-3 text-sm">
               <div>{finalizationPreview.readyCount} Ready drafts will be finalized dependency-first.</div>
