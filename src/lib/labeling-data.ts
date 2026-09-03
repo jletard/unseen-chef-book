@@ -38,7 +38,7 @@ export async function getLabelingWorkspace(): Promise<{
     supabaseAdmin.from("menu_items_v2").select("id, name, short_name, sides").or("active.is.null,active.eq.true").order("name"),
     supabaseAdmin.from("production_item_sources").select("production_item_id, source_type, source_id, normalized_source_name").eq("mapping_state", "confirmed"),
     supabaseAdmin.from("production_item_recipe_links").select("production_item_id, recipe_id").eq("role", "main").eq("active", true),
-    supabaseAdmin.from("menu_item_recipe_links").select("menu_item_id, recipe_id, role").eq("active", true),
+    supabaseAdmin.from("menu_item_recipe_links").select("menu_item_id, recipe_id, role"),
   ]);
 
   const error = ingredientResult.error ?? recipeResult.error ?? versionResult.error ?? itemResult.error ?? menuResult.error ?? sourceResult.error ?? linkResult.error ?? legacyLinkResult.error;
