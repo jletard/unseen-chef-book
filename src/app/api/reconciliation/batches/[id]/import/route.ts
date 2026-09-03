@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { validateRecipeDraftPayload, type RecipeDraftPayload } from "@/lib/cookbook-v2/domain";
 import type { SecretAIRecipeResult } from "@/lib/cookbook-v2/secret-ai-batch";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeCookbookName } from "@/lib/cookbook-v2/normalize-name";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -59,7 +60,7 @@ export async function POST(
         return { id: randomUUID(), draft };
       });
       const componentByName = new Map(
-        components.map((component) => [component.draft.name.trim().toLocaleLowerCase(), component]),
+        components.map((component) => [normalizeCookbookName(component.draft.name), component]),
       );
       if (componentByName.size !== components.length) {
         throw new Error(`${recipe.draft.name}: inline component names must be unique.`);
@@ -68,7 +69,7 @@ export async function POST(
       const draft = addOwnedIds(recipe.draft);
       draft.items = draft.items.map((line) => {
         if (line.kind !== "recipe" || !line.proposedName) return line;
-        const component = componentByName.get(line.proposedName.trim().toLocaleLowerCase());
+        const component = componentByName.get(normalizeCookbookName(line.proposedName));
         return component ? { ...line, nestedDraftId: component.id } : line;
       });
       for (const component of components) {
