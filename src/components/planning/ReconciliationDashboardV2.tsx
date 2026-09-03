@@ -866,7 +866,14 @@ function DraftReviewCard({
           <div className="mt-2 divide-y divide-zinc-900 border border-zinc-800">
             {items.map((item, index) => (
               <div key={index} className="flex justify-between gap-4 px-3 py-2 text-sm">
-                <span>{String(item.proposedName ?? "Unnamed item")}</span>
+                <span>
+                  {String(item.proposedName ?? "Unnamed item")}
+                  {item.kind === "recipe" && (
+                    <span className="ml-2 border border-blue-800 px-1.5 py-0.5 text-[10px] uppercase text-blue-300">
+                      Component
+                    </span>
+                  )}
+                </span>
                 <span className="whitespace-nowrap text-zinc-400">{String(item.quantity ?? "")} {String(item.unit ?? "")}</span>
               </div>
             ))}
@@ -937,6 +944,15 @@ function DraftQuickEditor({
         current.yieldUnit === previousItem.unit &&
         current.minimumBatchUnit === previousItem.unit;
       nextItems[index] = { ...nextItems[index], [name]: value };
+      if (name === "kind") {
+        if (value === "ingredient") {
+          delete nextItems[index].nestedDraftId;
+          delete nextItems[index].recipeId;
+          delete nextItems[index].recipeVersionId;
+        } else {
+          delete nextItems[index].ingredientId;
+        }
+      }
       if (shouldSyncBatch) {
         if (name === "quantity") {
           next.baseYield = value;
@@ -983,7 +999,16 @@ function DraftQuickEditor({
       <h5 className="mt-5 text-sm font-semibold text-zinc-300">Ingredient and component lines</h5>
       <div className="mt-2 space-y-2">
         {items.map((item, index) => (
-          <div key={String(item.id ?? index)} className="grid gap-2 border border-zinc-800 p-2 md:grid-cols-[1fr_8rem_8rem_1fr_auto]">
+          <div key={String(item.id ?? index)} className="grid gap-2 border border-zinc-800 p-2 md:grid-cols-[9rem_1fr_8rem_8rem_1fr_auto]">
+            <select
+              value={item.kind === "recipe" ? "recipe" : "ingredient"}
+              onChange={(event) => updateItem(index, "kind", event.target.value)}
+              aria-label={`Item ${index + 1} type`}
+              className="border border-zinc-700 bg-black px-2 py-2"
+            >
+              <option value="ingredient">Purchased</option>
+              <option value="recipe">Component</option>
+            </select>
             <input value={String(item.proposedName ?? "")} onChange={(event) => updateItem(index, "proposedName", event.target.value)} aria-label={`Item ${index + 1} name`} className="border border-zinc-700 bg-black px-2 py-2" />
             <input type="number" step="any" value={Number(item.quantity ?? 0)} onChange={(event) => updateItem(index, "quantity", Number(event.target.value))} aria-label={`Item ${index + 1} quantity`} className="border border-zinc-700 bg-black px-2 py-2" />
             <input value={String(item.unit ?? "")} onChange={(event) => updateItem(index, "unit", event.target.value)} aria-label={`Item ${index + 1} unit`} className="border border-zinc-700 bg-black px-2 py-2" />
@@ -991,13 +1016,22 @@ function DraftQuickEditor({
             <button type="button" onClick={() => removeItem(index)} className="border border-red-900 px-3 text-red-300">Remove</button>
           </div>
         ))}
-        <button
-          type="button"
-          onClick={() => setField("items", [...items, { id: crypto.randomUUID(), kind: "ingredient", proposedName: "", quantity: 1, unit: "g" }])}
-          className="border border-zinc-700 px-3 py-2 text-sm"
-        >
-          Add ingredient
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setField("items", [...items, { id: crypto.randomUUID(), kind: "ingredient", proposedName: "", quantity: 1, unit: "g" }])}
+            className="border border-zinc-700 px-3 py-2 text-sm"
+          >
+            Add purchased ingredient
+          </button>
+          <button
+            type="button"
+            onClick={() => setField("items", [...items, { id: crypto.randomUUID(), kind: "recipe", proposedName: "", quantity: 1, unit: "g" }])}
+            className="border border-blue-800 px-3 py-2 text-sm text-blue-300"
+          >
+            Add component
+          </button>
+        </div>
       </div>
 
       <h5 className="mt-5 text-sm font-semibold text-zinc-300">Method</h5>
