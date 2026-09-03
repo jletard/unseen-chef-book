@@ -35,7 +35,7 @@ export async function getLabelingWorkspace(): Promise<{
     supabaseAdmin.from("recipes").select("id, name, current_approved_version_id").is("retired_at", null).not("current_approved_version_id", "is", null).order("name"),
     supabaseAdmin.from("recipe_versions").select("id, recipe_id").eq("state", "approved"),
     supabaseAdmin.from("recipe_version_items").select("recipe_version_id, item_kind, ingredient_id, dependency_recipe_version_id, sort_order").order("sort_order"),
-    supabaseAdmin.from("menu_items_v2").select("id, name, short_name, sides").or("active.is.null,active.eq.true").order("name"),
+    supabaseAdmin.from("menu_items_v2").select("id, name, short_name, sides").order("name"),
     supabaseAdmin.from("production_item_sources").select("production_item_id, source_type, source_id, normalized_source_name").eq("mapping_state", "confirmed"),
     supabaseAdmin.from("production_item_recipe_links").select("production_item_id, recipe_id").eq("role", "main").eq("active", true),
     supabaseAdmin.from("menu_item_recipe_links").select("menu_item_id, recipe_id, role"),
@@ -145,7 +145,7 @@ export async function getLabelingWorkspace(): Promise<{
       ?? (menu.short_name ? recipeLabelByName.get(normalizeCookbookName(String(menu.short_name))) : undefined);
     if (!mainRecipe) continue;
 
-    if (linkedRecipeId) menuLinkedRecipeIds.add(linkedRecipeId);
+    menuLinkedRecipeIds.add(mainRecipe.recipeId);
     const defaultSides = ((menu.sides ?? []) as string[]).map(String).filter((name: string) => name.trim());
     const statements = [mainRecipe.ingredientStatement];
     const allergens = new Set(mainRecipe.allergens);
