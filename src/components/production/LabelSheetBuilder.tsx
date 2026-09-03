@@ -57,7 +57,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
   const [browseAllRecipes, setBrowseAllRecipes] = useState(false);
   const [recipeId, setRecipeId] = useState(initialRecipe?.recipeId ?? "");
   const [productName, setProductName] = useState(initialRecipe?.name ?? "");
-  const [netQuantity, setNetQuantity] = useState("");
+  const [netQuantity, setNetQuantity] = useState(initialRecipe?.recipeId.startsWith("menu:") ? "14" : "");
   const [netUnit, setNetUnit] = useState("oz");
   const [preparedDate, setPreparedDate] = useState(isoDate(new Date()));
   const [shelfLifeDays, setShelfLifeDays] = useState(7);
@@ -101,6 +101,8 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     const selected = recipes.find((item) => item.recipeId === id);
     setRecipeId(id);
     setProductName(selected?.name ?? "");
+    setNetQuantity(selected?.recipeId.startsWith("menu:") ? "14" : "");
+    setNetUnit("oz");
     setVariableSideIngredients({});
     setSelectedSides(initialSideSelections(selected));
     setIngredientOrderConfirmed(false);
