@@ -53,6 +53,12 @@ async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof creat
     if (!row.normalized_name || !row.current_approved_version_id) continue;
     approvedRecipes.set(row.normalized_name, (approvedRecipes.get(row.normalized_name) ?? 0) + 1);
   }
+  const readyRecipes = new Map<string, number>();
+  for (const draft of drafts) {
+    const name = typeof draft.draft_payload.name === "string" ? normalize(draft.draft_payload.name) : "";
+    if (!name) continue;
+    readyRecipes.set(name, (readyRecipes.get(name) ?? 0) + 1);
+  }
 
   const newIngredients = new Set<string>();
   const ambiguousIngredients = new Set<string>();
@@ -69,6 +75,7 @@ async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof creat
         const nestedDraftId = typeof item.nestedDraftId === "string" ? item.nestedDraftId : "";
         if (nestedDraftId) continue;
         if (!nestedDraftId && (approvedRecipes.get(normalize(proposedName)) ?? 0) === 1) continue;
+        if (!nestedDraftId && (readyRecipes.get(normalize(proposedName)) ?? 0) === 1) continue;
         dependencyBlockers.add(proposedName);
       }
     }
@@ -87,6 +94,12 @@ async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof creat
 
 function dependencyOrder(drafts: DraftRow[]) {
   const byId = new Map(drafts.map((draft) => [draft.id, draft]));
+  const byName = new Map<string, DraftRow[]>();
+  for (const draft of drafts) {
+    const name = typeof draft.draft_payload.name === "string" ? normalize(draft.draft_payload.name) : "";
+    if (!name) continue;
+    byName.set(name, [...(byName.get(name) ?? []), draft]);
+  }
   const result: DraftRow[] = [];
   const visited = new Set<string>();
   const visiting = new Set<string>();
@@ -95,8 +108,16 @@ function dependencyOrder(drafts: DraftRow[]) {
     if (visiting.has(draft.id)) throw new Error("Draft component dependency cycle detected.");
     visiting.add(draft.id);
     for (const item of recipeItems(draft)) {
-      if (item.kind !== "recipe" || typeof item.nestedDraftId !== "string") continue;
-      const dependency = byId.get(item.nestedDraftId);
+      if (item.kind !== "recipe") continue;
+      const nestedDraftId = typeof item.nestedDraftId === "string" ? item.nestedDraftId : "";
+      const proposedName = typeof item.proposedName === "string" ? normalize(item.proposedName) : "";
+      const namedCandidates = proposedName ? byName.get(proposedName) ?? [] : [];
+      const dependency = nestedDraftId
+        ? byId.get(nestedDraftId)
+        : namedCandidates.length === 1
+          ? namedCandidates[0]
+          : undefined;
+      if (dependency?.id === draft.id) continue;
       if (dependency) visit(dependency);
     }
     visiting.delete(draft.id);
