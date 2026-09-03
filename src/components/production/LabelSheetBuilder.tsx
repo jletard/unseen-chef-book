@@ -50,6 +50,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
   const [copies, setCopies] = useState(6);
   const [labelJobs, setLabelJobs] = useState<LabelJob[]>([]);
   const [variableSideIngredients, setVariableSideIngredients] = useState<Record<string, string>>({});
+  const [selectedSideRecipes, setSelectedSideRecipes] = useState<Record<string, string>>({});
   const [ingredientOrderConfirmed, setIngredientOrderConfirmed] = useState(false);
   const [nutritionExemptionConfirmed, setNutritionExemptionConfirmed] = useState(false);
   const recipe = recipes.find((item) => item.recipeId === recipeId);
@@ -62,6 +63,12 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
   const variableSidesComplete = (recipe?.variableSides ?? []).every(
     (side) => variableSideIngredients[side]?.trim(),
   );
+  const selectableSidesComplete = (recipe?.selectableSides ?? []).every(
+    (side) => selectedSideRecipes[side.label],
+  );
+  const selectedSideIncompleteIngredients = (recipe?.selectableSides ?? []).flatMap((side) =>
+    side.options.find((option) => option.recipeId === selectedSideRecipes[side.label])?.incompleteIngredients ?? [],
+  );
   const currentLabelValid = Boolean(
     recipe &&
     productName.trim() &&
@@ -70,6 +77,8 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     ingredientOrderConfirmed &&
     nutritionExemptionConfirmed &&
     variableSidesComplete &&
+    selectableSidesComplete &&
+    selectedSideIncompleteIngredients.length === 0 &&
     recipe.incompleteIngredients.length === 0,
   );
   const printable = labelJobs.length > 0;
@@ -79,6 +88,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     setRecipeId(id);
     setProductName(selected?.name ?? "");
     setVariableSideIngredients({});
+    setSelectedSideRecipes({});
     setIngredientOrderConfirmed(false);
   }
 
@@ -87,6 +97,14 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     const variableStatements = (recipe.variableSides ?? []).map(
       (side) => `${side}: ${variableSideIngredients[side].trim()}`,
     );
+    const selectedSides = (recipe.selectableSides ?? []).map((side) =>
+      side.options.find((option) => option.recipeId === selectedSideRecipes[side.label]),
+    ).filter((side): side is NonNullable<typeof side> => Boolean(side));
+    const selectedStatements = selectedSides.map((side) =>
+      side.ingredientStatement ? `${side.name}: ${side.ingredientStatement}` : side.name,
+    );
+    const selectedAllergens = new Set(recipe.allergens);
+    selectedSides.forEach((side) => side.allergens.forEach((allergen) => selectedAllergens.add(allergen)));
     setLabelJobs((current) => [
       ...current,
       {
@@ -98,8 +116,8 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
         preparedDate,
         useByDate,
         copies: Math.max(1, Math.floor(copies)),
-        ingredientStatement: [recipe.ingredientStatement, ...variableStatements].filter(Boolean).join("; "),
-        allergens: recipe.allergens,
+        ingredientStatement: [recipe.ingredientStatement, ...selectedStatements, ...variableStatements].filter(Boolean).join("; "),
+        allergens: Array.from(selectedAllergens).sort(),
       },
     ]);
   }
@@ -128,6 +146,19 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
                 placeholder="e.g. broccoli, carrots, zucchini, olive oil, kosher salt, black pepper"
                 className="mt-1 block w-full border border-amber-700 bg-black px-3 py-2"
               />
+            </label>
+          ))}
+          {recipe?.selectableSides?.map((side) => (
+            <label key={side.label} className="text-sm md:col-span-2 xl:col-span-4">
+              Choose {side.label}
+              <select
+                value={selectedSideRecipes[side.label] ?? ""}
+                onChange={(event) => setSelectedSideRecipes((current) => ({ ...current, [side.label]: event.target.value }))}
+                className="mt-1 block w-full border border-amber-700 bg-black px-3 py-2"
+              >
+                <option value="">Select one</option>
+                {side.options.map((option) => <option key={option.recipeId} value={option.recipeId}>{option.name}</option>)}
+              </select>
             </label>
           ))}
           <label className="text-sm">Printed product name
@@ -164,9 +195,9 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
           {netDeclaration && <div className="text-zinc-400">Printed net quantity: <strong className="text-white">{netDeclaration}</strong></div>}
         </div>
 
-        {recipe?.incompleteIngredients.length ? (
+        {(recipe?.incompleteIngredients.length || selectedSideIncompleteIngredients.length) ? (
           <div className="mt-4 border border-amber-800 bg-amber-950/20 p-3 text-sm text-amber-200">
-            Cannot print a compliance label yet. Review: {recipe.incompleteIngredients.join(" · ")}
+            Cannot print a compliance label yet. Review: {[...(recipe?.incompleteIngredients ?? []), ...selectedSideIncompleteIngredients].join(" · ")}
           </div>
         ) : null}
         <div className="mt-4 flex flex-wrap gap-3">
