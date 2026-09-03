@@ -52,8 +52,11 @@ function netQuantityDeclaration(quantity: string, unit: string) {
 }
 
 export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] }) {
-  const [recipeId, setRecipeId] = useState(recipes[0]?.recipeId ?? "");
-  const [productName, setProductName] = useState(recipes[0]?.name ?? "");
+  const topLevelRecipes = recipes.filter((item) => item.recipeId.startsWith("menu:"));
+  const initialRecipe = topLevelRecipes[0] ?? recipes[0];
+  const [browseAllRecipes, setBrowseAllRecipes] = useState(false);
+  const [recipeId, setRecipeId] = useState(initialRecipe?.recipeId ?? "");
+  const [productName, setProductName] = useState(initialRecipe?.name ?? "");
   const [netQuantity, setNetQuantity] = useState("");
   const [netUnit, setNetUnit] = useState("oz");
   const [preparedDate, setPreparedDate] = useState(isoDate(new Date()));
@@ -61,10 +64,11 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
   const [copies, setCopies] = useState(6);
   const [labelJobs, setLabelJobs] = useState<LabelJob[]>([]);
   const [variableSideIngredients, setVariableSideIngredients] = useState<Record<string, string>>({});
-  const [selectedSides, setSelectedSides] = useState<SideSelection[]>(() => initialSideSelections(recipes[0]));
+  const [selectedSides, setSelectedSides] = useState<SideSelection[]>(() => initialSideSelections(initialRecipe));
   const [ingredientOrderConfirmed, setIngredientOrderConfirmed] = useState(false);
   const [nutritionExemptionConfirmed, setNutritionExemptionConfirmed] = useState(false);
   const recipe = recipes.find((item) => item.recipeId === recipeId);
+  const productRecipes = browseAllRecipes || topLevelRecipes.length === 0 ? recipes : topLevelRecipes;
   const useByDate = useMemo(() => {
     const date = new Date(`${preparedDate}T12:00:00`);
     date.setDate(date.getDate() + Math.max(shelfLifeDays - 1, 0));
@@ -102,6 +106,13 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     setIngredientOrderConfirmed(false);
   }
 
+  function toggleBrowseAll(checked: boolean) {
+    setBrowseAllRecipes(checked);
+    if (!checked && !topLevelRecipes.some((item) => item.recipeId === recipeId) && topLevelRecipes[0]) {
+      chooseRecipe(topLevelRecipes[0].recipeId);
+    }
+  }
+
   function addToSheet() {
     if (!recipe || !currentLabelValid) return;
     const variableStatements = selectedSides.filter((side) => side.variable).map(
@@ -135,8 +146,12 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="text-sm">Approved recipe
             <select value={recipeId} onChange={(event) => chooseRecipe(event.target.value)} className="mt-1 block w-full border border-zinc-700 bg-black px-3 py-2">
-              {recipes.map((item) => <option key={item.recipeId} value={item.recipeId}>{item.name}</option>)}
+              {productRecipes.map((item) => <option key={item.recipeId} value={item.recipeId}>{item.name}</option>)}
             </select>
+          </label>
+          <label className="flex items-center gap-2 self-end border border-zinc-800 px-3 py-2 text-sm">
+            <input type="checkbox" checked={browseAllRecipes} onChange={(event) => toggleBrowseAll(event.target.checked)} className="size-4" />
+            <span>Browse all approved recipes and components</span>
           </label>
           {recipe?.defaultSides?.length ? (
             <div className="text-sm md:col-span-2 xl:col-span-4">
