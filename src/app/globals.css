@@ -177,4 +177,127 @@ svg {
     box-shadow: none !important;
     text-shadow: none !important;
   }
+
+  .label-controls,
+  body:has(.label-sheet) > div > div > header,
+  body:has(.label-sheet) > div > div > nav,
+  body:has(.label-sheet) > div > div > footer,
+  body:has(.label-sheet) main > h1,
+  body:has(.label-sheet) main > p {
+    display: none !important;
+  }
+
+  body:has(.label-sheet) main {
+    padding: 0 !important;
+  }
+
+  .label-sheet {
+    display: grid;
+    page: labels;
+    width: 8.1875in;
+    grid-template-columns: repeat(2, 4in);
+    grid-auto-rows: 3.3333in;
+    column-gap: 0.1875in;
+    margin: 0;
+  }
+
+  @page labels {
+    size: letter portrait;
+    margin: 0.5in 0.15625in;
+  }
+
+  .food-label {
+    position: relative;
+    width: 4in;
+    height: 3.3333in;
+    overflow: hidden;
+    break-inside: avoid;
+    padding: 0.18in 0.2in;
+    border: 0;
+    font-size: 8.5pt;
+    line-height: 1.14;
+  }
+
+  .food-label h2 {
+    margin: 0.03in 0 0.08in;
+    font-size: 15pt;
+  }
+
+  .food-label p {
+    margin: 0 0 0.07in;
+  }
+
+  .food-label-brand {
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  .food-label-allergens,
+  .food-label-storage {
+    font-size: 9pt;
+    font-weight: 700;
+  }
+
+  .food-label-dates {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.1in;
+    margin-bottom: 0.07in;
+  }
+
+  .food-label footer {
+    position: absolute;
+    right: 0.2in;
+    bottom: 0.15in;
+    left: 0.2in;
+    border-top: 1px solid #777;
+    padding-top: 0.05in;
+    font-size: 7.5pt;
+  }
+}
+
+@media screen {
+  .label-sheet {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .food-label {
+    min-height: 20rem;
+    border: 1px solid var(--border);
+    background: white;
+    color: black;
+    padding: 1rem;
+  }
+
+  .food-label h2 {
+    margin-top: 0.25rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+
+  .food-label p {
+    margin-top: 0.75rem;
+  }
+
+  .food-label-brand,
+  .food-label-allergens,
+  .food-label-storage {
+    font-weight: 700;
+  }
+
+  .food-label-dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin-top: 0.75rem;
+  }
+
+  .food-label footer {
+    margin-top: 1rem;
+    border-top: 1px solid #777;
+    padding-top: 0.5rem;
+    font-size: 0.75rem;
+  }
 }

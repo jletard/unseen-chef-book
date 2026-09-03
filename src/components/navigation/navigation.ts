@@ -19,6 +19,7 @@ export const navigationSections: NavigationSection[] = [
       { label: "Components", href: "/planning/components" },
       { label: "Sides", href: "/planning/sides" },
       { label: "Ingredients", href: "/planning/ingredients" },
+      { label: "Allergens", href: "/planning/allergens" },
       { label: "Categories", href: "/planning/categories" },
       { label: "Protein Types", href: "/planning/protein-types" },
       { label: "Reconciliation", href: "/planning/reconciliation" },
@@ -33,6 +34,7 @@ export const navigationSections: NavigationSection[] = [
       { label: "Production List", href: "/production/list" },
       { label: "Shopping List", href: "/production/shopping" },
       { label: "Prep List", href: "/production/prep" },
+      { label: "Labels", href: "/production/labels" },
     ],
   },
   {
