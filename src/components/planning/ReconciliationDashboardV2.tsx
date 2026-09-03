@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import SecretAIImportBox from "@/components/SecretAIImportBox/SecretAIImportBox";
@@ -74,6 +74,8 @@ export default function ReconciliationDashboardV2({
   const [message, setMessage] = useState("");
   const [batches, setBatches] = useState<BatchStatus[]>([]);
   const [drafts, setDrafts] = useState(dashboard.drafts);
+  const [dashboardDraftSnapshot, setDashboardDraftSnapshot] = useState(dashboard.drafts);
+  const activeBatchRef = useRef<HTMLElement>(null);
   const [activeBatch, setActiveBatch] = useState<{
     id: string;
     name: string;
@@ -99,6 +101,15 @@ export default function ReconciliationDashboardV2({
       setMessage(error instanceof Error ? error.message : "Batch status could not be loaded.");
     });
   }, []);
+
+  if (dashboardDraftSnapshot !== dashboard.drafts) {
+    setDashboardDraftSnapshot(dashboard.drafts);
+    setDrafts(dashboard.drafts);
+  }
+
+  function focusActiveBatch() {
+    window.setTimeout(() => activeBatchRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
 
   function toggle(productionItemId: string) {
     setMessage("");
@@ -166,6 +177,7 @@ export default function ReconciliationDashboardV2({
         packets,
         completedPackets: new Set(),
       });
+      focusActiveBatch();
       setMessage(
         `${result.jobCount ?? 0} recipes prepared as ${packets.length} Secret AI+ ` +
           `${packets.length === 1 ? "packet" : "packets"}. Copy, ask ChatGPT, and paste each result below.`,
@@ -192,7 +204,9 @@ export default function ReconciliationDashboardV2({
       if (!current) return current;
       const completedPackets = new Set(current.completedPackets);
       completedPackets.add(packetIndex);
-      return { ...current, completedPackets };
+      return completedPackets.size === current.packets.length
+        ? null
+        : { ...current, completedPackets };
     });
     setMessage(
       `Imported ${result.importedJobs ?? recipes.length} recipe drafts and ` +
@@ -229,6 +243,7 @@ export default function ReconciliationDashboardV2({
       (_, index) => requests.slice(index * SECRET_AI_PACKET_SIZE, (index + 1) * SECRET_AI_PACKET_SIZE),
     );
     setActiveBatch({ id: batch.id, name: batch.name, packets, completedPackets: new Set() });
+    focusActiveBatch();
     setMessage(`Resumed ${requests.length} recipes in ${packets.length} Secret AI+ ${packets.length === 1 ? "packet" : "packets"}.`);
   }
 
@@ -309,8 +324,13 @@ export default function ReconciliationDashboardV2({
       </section>
 
       {activeBatch && (
-        <section className="mt-6 border border-blue-900 bg-blue-950/10 p-4">
-          <h2 className="text-lg font-semibold">Secret AI+ · {activeBatch.name}</h2>
+        <section ref={activeBatchRef} className="mt-6 scroll-mt-4 border border-blue-900 bg-blue-950/10 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Secret AI+ · {activeBatch.name}</h2>
+            <span className="text-sm text-blue-300">
+              {activeBatch.packets.length - activeBatch.completedPackets.size} of {activeBatch.packets.length} packets remaining
+            </span>
+          </div>
           <p className="mt-1 text-sm text-zinc-400">
             This is one logical batch split into response-sized packets. Each successful paste creates all
             parent and inline component drafts together; it does not click through the old recipe form.
@@ -318,6 +338,8 @@ export default function ReconciliationDashboardV2({
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {activeBatch.packets.map((packet, packetIndex) => {
               const complete = activeBatch.completedPackets.has(packetIndex);
+              const nextPendingIndex = activeBatch.packets.findIndex((_, index) => !activeBatch.completedPackets.has(index));
+              const isNext = packetIndex === nextPendingIndex;
               return (
                 <div key={packetIndex} className="border border-zinc-800 bg-black p-3">
                   <div className="flex items-start justify-between gap-3">
@@ -331,11 +353,12 @@ export default function ReconciliationDashboardV2({
                       <span className="text-sm text-emerald-400">Imported</span>
                     ) : (
                       <SecretAIImportBox
+                        key={`${packetIndex}:${isNext ? "active" : "waiting"}`}
                         formSchema={createRecipePacketSchema(packet.map((request) => request.jobId))}
                         currentValues={packetCurrentValues(packet)}
                         onImport={(values) => importPacket(packetIndex, values)}
                         successMessage="Packet imported into the fast review queue."
-                        closeAfterImport
+                        initiallyOpen={isNext}
                       />
                     )}
                   </div>
@@ -489,6 +512,7 @@ function FastReviewWorkspace({
     readyCount: number;
     newIngredients: string[];
     ambiguousIngredients: string[];
+    ambiguousComponents: string[];
     dependencyBlockers: string[];
   } | null>(null);
   const [finalizationBusy, setFinalizationBusy] = useState(false);
@@ -740,6 +764,11 @@ function FastReviewWorkspace({
                   Ambiguous ingredients: {finalizationPreview.ambiguousIngredients.join(" · ")}
                 </div>
               )}
+              {finalizationPreview.ambiguousComponents.length > 0 && (
+                <div className="mt-2 text-red-300">
+                  Ambiguous approved components: {finalizationPreview.ambiguousComponents.join(" · ")}
+                </div>
+              )}
               {finalizationPreview.dependencyBlockers.length > 0 && (
                 <div className="mt-2 text-red-300">
                   Missing approved components: {finalizationPreview.dependencyBlockers.join(" · ")}
@@ -750,7 +779,7 @@ function FastReviewWorkspace({
                 <button
                   type="button"
                   onClick={finalizeReady}
-                  disabled={finalizationBusy || finalizationPreview.ambiguousIngredients.length > 0 || finalizationPreview.dependencyBlockers.length > 0}
+                  disabled={finalizationBusy || finalizationPreview.ambiguousIngredients.length > 0 || finalizationPreview.ambiguousComponents.length > 0 || finalizationPreview.dependencyBlockers.length > 0}
                   className="border border-emerald-600 px-4 py-2 font-semibold text-emerald-300 disabled:opacity-40"
                 >
                   Confirm &amp; finalize
