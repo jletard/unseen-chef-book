@@ -26,6 +26,7 @@ export type LabelIngredient = {
 export type RecipeLabel = {
   recipeId: string;
   name: string;
+  defaultSides?: string[];
   ingredientStatement: string;
   allergens: string[];
   incompleteIngredients: string[];

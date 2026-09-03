@@ -100,6 +100,12 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
               {recipes.map((item) => <option key={item.recipeId} value={item.recipeId}>{item.name}</option>)}
             </select>
           </label>
+          {recipe?.defaultSides?.length ? (
+            <div className="text-sm md:col-span-2 xl:col-span-4">
+              <span className="text-zinc-400">Default sides included on label:</span>{" "}
+              <strong>{recipe.defaultSides.join(" · ")}</strong>
+            </div>
+          ) : null}
           <label className="text-sm">Printed product name
             <input value={productName} onChange={(event) => setProductName(event.target.value)} className="mt-1 block w-full border border-zinc-700 bg-black px-3 py-2" />
           </label>
