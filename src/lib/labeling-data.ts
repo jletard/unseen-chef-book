@@ -32,7 +32,7 @@ export async function getLabelingWorkspace(): Promise<{
 }> {
   const [ingredientResult, recipeResult, versionResult, itemResult, menuResult, sourceResult, linkResult, legacyLinkResult] = await Promise.all([
     supabaseAdmin.from("ingredients").select("id, name, label_name, ingredient_statement, allergen_keys, allergen_details, dietary_flags, label_review_status").is("retired_at", null).order("name"),
-    supabaseAdmin.from("recipes").select("id, name, current_approved_version_id").is("retired_at", null).not("current_approved_version_id", "is", null).order("name"),
+    supabaseAdmin.from("recipes").select("id, name, recipe_type, current_approved_version_id").is("retired_at", null).not("current_approved_version_id", "is", null).order("name"),
     supabaseAdmin.from("recipe_versions").select("id, recipe_id").eq("state", "approved"),
     supabaseAdmin.from("recipe_version_items").select("recipe_version_id, item_kind, ingredient_id, dependency_recipe_version_id, sort_order").order("sort_order"),
     supabaseAdmin.from("menu_items_v2").select("id, name, short_name, sides").order("name"),
@@ -109,6 +109,7 @@ export async function getLabelingWorkspace(): Promise<{
     return {
       recipeId: String(row.id),
       name: String(row.name),
+      recipeCategory: String(row.recipe_type || "other"),
       ingredientStatement: resolved.statements.join(", "),
       allergens: Array.from(resolved.allergens).sort(),
       incompleteIngredients: Array.from(resolved.incomplete).sort(),
@@ -147,15 +148,9 @@ export async function getLabelingWorkspace(): Promise<{
 
     menuLinkedRecipeIds.add(mainRecipe.recipeId);
     const defaultSides = ((menu.sides ?? []) as string[]).map(String).filter((name: string) => name.trim());
-    const statements = [
-      mainRecipe.ingredientStatement
-        ? `${mainRecipe.name}: ${mainRecipe.ingredientStatement}`
-        : mainRecipe.name,
-    ];
-    const allergens = new Set(mainRecipe.allergens);
-    const incomplete = new Set(mainRecipe.incompleteIngredients);
+    const statements = [mainRecipe.ingredientStatement ? `${mainRecipe.name}: ${mainRecipe.ingredientStatement}` : mainRecipe.name];
     const variableSides: string[] = [];
-    const selectableSides: NonNullable<RecipeLabel["selectableSides"]> = [];
+    const sideSelections: NonNullable<RecipeLabel["sideSelections"]> = [];
 
     for (const sideName of defaultSides) {
       const optionNames = sideName.split(/\s+or\s+/iu).map((name) => name.trim()).filter(Boolean);
@@ -167,17 +162,8 @@ export async function getLabelingWorkspace(): Promise<{
           return (optionRecipeId ? recipeLabelById.get(optionRecipeId) : undefined)
             ?? recipeLabelByName.get(normalizedOptionName);
         });
-        if (options.every((option): option is RecipeLabel => Boolean(option))) {
-          selectableSides.push({
-            label: sideName,
-            options: options.map((option) => ({
-              recipeId: option.recipeId,
-              name: option.name,
-              ingredientStatement: option.ingredientStatement,
-              allergens: option.allergens,
-              incompleteIngredients: option.incompleteIngredients,
-            })),
-          });
+        if (options.some(Boolean)) {
+          sideSelections.push({ label: sideName });
           continue;
         }
       }
@@ -189,27 +175,25 @@ export async function getLabelingWorkspace(): Promise<{
       if (!side) {
         if (normalizedSideName === "seasonal vegetables") {
           variableSides.push(sideName);
+          sideSelections.push({ label: sideName, variable: true });
           continue;
         }
-        incomplete.add(`Missing approved default side: ${sideName}`);
+        sideSelections.push({ label: sideName });
         continue;
       }
-      statements.push(
-        side.ingredientStatement ? `${side.name}: ${side.ingredientStatement}` : side.name,
-      );
-      side.allergens.forEach((value) => allergens.add(value));
-      side.incompleteIngredients.forEach((value) => incomplete.add(value));
+      sideSelections.push({ label: sideName, recipeId: side.recipeId });
     }
 
     menuLabels.push({
       recipeId: `menu:${menu.id}`,
       name: String(menu.name),
+      recipeCategory: mainRecipe.recipeCategory,
       defaultSides,
       variableSides,
-      selectableSides,
+      sideSelections,
       ingredientStatement: statements.filter(Boolean).join("; "),
-      allergens: Array.from(allergens).sort(),
-      incompleteIngredients: Array.from(incomplete).sort(),
+      allergens: mainRecipe.allergens,
+      incompleteIngredients: mainRecipe.incompleteIngredients,
     });
   }
 
