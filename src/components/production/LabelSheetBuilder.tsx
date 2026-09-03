@@ -16,6 +16,17 @@ type LabelJob = {
   allergens: string[];
 };
 
+type SideSelection = { id: string; label: string; recipeId: string; variable: boolean };
+
+function initialSideSelections(recipe?: RecipeLabel): SideSelection[] {
+  return (recipe?.sideSelections ?? []).map((side, index) => ({
+    id: `default-side-${index}`,
+    label: side.label,
+    recipeId: side.recipeId ?? "",
+    variable: Boolean(side.variable),
+  }));
+}
+
 const businessAddress = "4959 Pan American Freeway NE Suite A, Albuquerque, NM 87109";
 
 function isoDate(date: Date) {
@@ -50,7 +61,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
   const [copies, setCopies] = useState(6);
   const [labelJobs, setLabelJobs] = useState<LabelJob[]>([]);
   const [variableSideIngredients, setVariableSideIngredients] = useState<Record<string, string>>({});
-  const [selectedSideRecipes, setSelectedSideRecipes] = useState<Record<string, string>>({});
+  const [selectedSides, setSelectedSides] = useState<SideSelection[]>(() => initialSideSelections(recipes[0]));
   const [ingredientOrderConfirmed, setIngredientOrderConfirmed] = useState(false);
   const [nutritionExemptionConfirmed, setNutritionExemptionConfirmed] = useState(false);
   const recipe = recipes.find((item) => item.recipeId === recipeId);
@@ -60,15 +71,15 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     return isoDate(date);
   }, [preparedDate, shelfLifeDays]);
   const netDeclaration = netQuantityDeclaration(netQuantity, netUnit);
-  const variableSidesComplete = (recipe?.variableSides ?? []).every(
-    (side) => variableSideIngredients[side]?.trim(),
+  const sideRecipes = recipes.filter((item) => item.recipeCategory === "side" && !item.recipeId.startsWith("menu:"));
+  const selectedSideRecipeRecords = selectedSides
+    .filter((side) => !side.variable && side.recipeId)
+    .map((side) => recipes.find((item) => item.recipeId === side.recipeId))
+    .filter((side): side is RecipeLabel => Boolean(side));
+  const selectableSidesComplete = selectedSides.every((side) =>
+    side.variable ? variableSideIngredients[side.id]?.trim() : side.recipeId,
   );
-  const selectableSidesComplete = (recipe?.selectableSides ?? []).every(
-    (side) => selectedSideRecipes[side.label],
-  );
-  const selectedSideIncompleteIngredients = (recipe?.selectableSides ?? []).flatMap((side) =>
-    side.options.find((option) => option.recipeId === selectedSideRecipes[side.label])?.incompleteIngredients ?? [],
-  );
+  const selectedSideIncompleteIngredients = selectedSideRecipeRecords.flatMap((side) => side.incompleteIngredients);
   const currentLabelValid = Boolean(
     recipe &&
     productName.trim() &&
@@ -76,7 +87,6 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     netDeclaration &&
     ingredientOrderConfirmed &&
     nutritionExemptionConfirmed &&
-    variableSidesComplete &&
     selectableSidesComplete &&
     selectedSideIncompleteIngredients.length === 0 &&
     recipe.incompleteIngredients.length === 0,
@@ -88,23 +98,20 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     setRecipeId(id);
     setProductName(selected?.name ?? "");
     setVariableSideIngredients({});
-    setSelectedSideRecipes({});
+    setSelectedSides(initialSideSelections(selected));
     setIngredientOrderConfirmed(false);
   }
 
   function addToSheet() {
     if (!recipe || !currentLabelValid) return;
-    const variableStatements = (recipe.variableSides ?? []).map(
-      (side) => `${side}: ${variableSideIngredients[side].trim()}`,
+    const variableStatements = selectedSides.filter((side) => side.variable).map(
+      (side) => `${side.label}: ${variableSideIngredients[side.id].trim()}`,
     );
-    const selectedSides = (recipe.selectableSides ?? []).map((side) =>
-      side.options.find((option) => option.recipeId === selectedSideRecipes[side.label]),
-    ).filter((side): side is NonNullable<typeof side> => Boolean(side));
-    const selectedStatements = selectedSides.map((side) =>
+    const selectedStatements = selectedSideRecipeRecords.map((side) =>
       side.ingredientStatement ? `${side.name}: ${side.ingredientStatement}` : side.name,
     );
     const selectedAllergens = new Set(recipe.allergens);
-    selectedSides.forEach((side) => side.allergens.forEach((allergen) => selectedAllergens.add(allergen)));
+    selectedSideRecipeRecords.forEach((side) => side.allergens.forEach((allergen) => selectedAllergens.add(allergen)));
     setLabelJobs((current) => [
       ...current,
       {
@@ -133,34 +140,30 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
           </label>
           {recipe?.defaultSides?.length ? (
             <div className="text-sm md:col-span-2 xl:col-span-4">
-              <span className="text-zinc-400">Default sides included on label:</span>{" "}
+              <span className="text-zinc-400">Saved sides (editable below):</span>{" "}
               <strong>{recipe.defaultSides.join(" · ")}</strong>
             </div>
           ) : null}
-          {recipe?.variableSides?.map((side) => (
-            <label key={side} className="text-sm md:col-span-2 xl:col-span-4">
-              Ingredients used in {side} this batch
-              <input
-                value={variableSideIngredients[side] ?? ""}
-                onChange={(event) => setVariableSideIngredients((current) => ({ ...current, [side]: event.target.value }))}
-                placeholder="e.g. broccoli, carrots, zucchini, olive oil, kosher salt, black pepper"
-                className="mt-1 block w-full border border-amber-700 bg-black px-3 py-2"
-              />
-            </label>
+          {selectedSides.map((side) => (
+            <div key={side.id} className="grid gap-2 md:col-span-2 md:grid-cols-[1fr_auto] xl:col-span-4">
+              {side.variable ? (
+                <label className="text-sm">Ingredients used in {side.label} this batch
+                  <input value={variableSideIngredients[side.id] ?? ""} onChange={(event) => setVariableSideIngredients((current) => ({ ...current, [side.id]: event.target.value }))} placeholder="e.g. broccoli, carrots, zucchini, olive oil, kosher salt, black pepper" className="mt-1 block w-full border border-amber-700 bg-black px-3 py-2" />
+                </label>
+              ) : (
+                <label className="text-sm">Side {side.recipeId ? "" : `(choose replacement for ${side.label})`}
+                  <select value={side.recipeId} onChange={(event) => setSelectedSides((current) => current.map((item) => item.id === side.id ? { ...item, recipeId: event.target.value } : item))} className="mt-1 block w-full border border-amber-700 bg-black px-3 py-2">
+                    <option value="">Select an approved side</option>
+                    {sideRecipes.map((option) => <option key={option.recipeId} value={option.recipeId}>{option.name}</option>)}
+                  </select>
+                </label>
+              )}
+              <button type="button" onClick={() => setSelectedSides((current) => current.filter((item) => item.id !== side.id))} className="self-end border border-red-800 px-4 py-2 text-red-300">Remove side</button>
+            </div>
           ))}
-          {recipe?.selectableSides?.map((side) => (
-            <label key={side.label} className="text-sm md:col-span-2 xl:col-span-4">
-              Choose {side.label}
-              <select
-                value={selectedSideRecipes[side.label] ?? ""}
-                onChange={(event) => setSelectedSideRecipes((current) => ({ ...current, [side.label]: event.target.value }))}
-                className="mt-1 block w-full border border-amber-700 bg-black px-3 py-2"
-              >
-                <option value="">Select one</option>
-                {side.options.map((option) => <option key={option.recipeId} value={option.recipeId}>{option.name}</option>)}
-              </select>
-            </label>
-          ))}
+          {recipe?.recipeId.startsWith("menu:") ? (
+            <button type="button" onClick={() => setSelectedSides((current) => [...current, { id: crypto.randomUUID(), label: "Additional side", recipeId: "", variable: false }])} className="w-fit border border-sky-700 px-4 py-2 text-sm text-sky-300 md:col-span-2 xl:col-span-4">Add side</button>
+          ) : null}
           <label className="text-sm">Printed product name
             <input value={productName} onChange={(event) => setProductName(event.target.value)} className="mt-1 block w-full border border-zinc-700 bg-black px-3 py-2" />
           </label>
