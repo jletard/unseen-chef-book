@@ -219,18 +219,26 @@ svg {
   }
 
   .food-label h2 {
-    margin: 0.03in 0 0.08in;
+    margin: 0;
     font-size: 15pt;
+  }
+
+  .food-label-header {
+    display: flex;
+    align-items: center;
+    gap: 0.1in;
+    margin-bottom: 0.08in;
+  }
+
+  .food-label-logo {
+    width: 0.58in;
+    height: 0.58in;
+    flex: 0 0 auto;
+    object-fit: contain;
   }
 
   .food-label p {
     margin: 0 0 0.07in;
-  }
-
-  .food-label-brand {
-    font-size: 8pt;
-    font-weight: 700;
-    letter-spacing: 0.08em;
   }
 
   .food-label-allergens,
@@ -272,16 +280,28 @@ svg {
   }
 
   .food-label h2 {
-    margin-top: 0.25rem;
+    margin: 0;
     font-size: 1.4rem;
     font-weight: 700;
+  }
+
+  .food-label-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .food-label-logo {
+    width: 4rem;
+    height: 4rem;
+    flex: 0 0 auto;
+    object-fit: contain;
   }
 
   .food-label p {
     margin-top: 0.75rem;
   }
 
-  .food-label-brand,
   .food-label-allergens,
   .food-label-storage {
     font-weight: 700;

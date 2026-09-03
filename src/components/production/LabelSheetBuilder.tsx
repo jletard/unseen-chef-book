@@ -177,8 +177,14 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
             if (!jobRecipe) return [];
             return Array.from({ length: job.copies }, (_, index) => (
             <article className="food-label" key={`${job.id}-${index}`}>
-              <header>
-                <div className="food-label-brand">THE UNSEEN CHEF</div>
+              <header className="food-label-header">
+                {/* This is the same production logo asset used by the admin label report. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="https://order.theunseenchef.com/images/branding/unseen-chef-logo-main.png"
+                  alt="The Unseen Chef"
+                  className="food-label-logo"
+                />
                 <h2>{job.productName || jobRecipe.name}</h2>
               </header>
               <p><strong>Ingredients:</strong> {jobRecipe.ingredientStatement || "Ingredient data incomplete"}</p>
