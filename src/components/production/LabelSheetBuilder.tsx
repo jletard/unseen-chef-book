@@ -12,6 +12,8 @@ type LabelJob = {
   preparedDate: string;
   useByDate: string;
   copies: number;
+  ingredientStatement: string;
+  allergens: string[];
 };
 
 const businessAddress = "4959 Pan American Freeway NE Suite A, Albuquerque, NM 87109";
@@ -47,6 +49,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
   const [shelfLifeDays, setShelfLifeDays] = useState(7);
   const [copies, setCopies] = useState(6);
   const [labelJobs, setLabelJobs] = useState<LabelJob[]>([]);
+  const [variableSideIngredients, setVariableSideIngredients] = useState<Record<string, string>>({});
   const [ingredientOrderConfirmed, setIngredientOrderConfirmed] = useState(false);
   const [nutritionExemptionConfirmed, setNutritionExemptionConfirmed] = useState(false);
   const recipe = recipes.find((item) => item.recipeId === recipeId);
@@ -56,6 +59,9 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     return isoDate(date);
   }, [preparedDate, shelfLifeDays]);
   const netDeclaration = netQuantityDeclaration(netQuantity, netUnit);
+  const variableSidesComplete = (recipe?.variableSides ?? []).every(
+    (side) => variableSideIngredients[side]?.trim(),
+  );
   const currentLabelValid = Boolean(
     recipe &&
     productName.trim() &&
@@ -63,6 +69,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     netDeclaration &&
     ingredientOrderConfirmed &&
     nutritionExemptionConfirmed &&
+    variableSidesComplete &&
     recipe.incompleteIngredients.length === 0,
   );
   const printable = labelJobs.length > 0;
@@ -71,11 +78,15 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     const selected = recipes.find((item) => item.recipeId === id);
     setRecipeId(id);
     setProductName(selected?.name ?? "");
+    setVariableSideIngredients({});
     setIngredientOrderConfirmed(false);
   }
 
   function addToSheet() {
     if (!recipe || !currentLabelValid) return;
+    const variableStatements = (recipe.variableSides ?? []).map(
+      (side) => `${side} (${variableSideIngredients[side].trim()})`,
+    );
     setLabelJobs((current) => [
       ...current,
       {
@@ -87,6 +98,8 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
         preparedDate,
         useByDate,
         copies: Math.max(1, Math.floor(copies)),
+        ingredientStatement: [recipe.ingredientStatement, ...variableStatements].filter(Boolean).join(", "),
+        allergens: recipe.allergens,
       },
     ]);
   }
@@ -106,6 +119,17 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
               <strong>{recipe.defaultSides.join(" · ")}</strong>
             </div>
           ) : null}
+          {recipe?.variableSides?.map((side) => (
+            <label key={side} className="text-sm md:col-span-2 xl:col-span-4">
+              Ingredients used in {side} this batch
+              <input
+                value={variableSideIngredients[side] ?? ""}
+                onChange={(event) => setVariableSideIngredients((current) => ({ ...current, [side]: event.target.value }))}
+                placeholder="e.g. broccoli, carrots, zucchini, olive oil, kosher salt, black pepper"
+                className="mt-1 block w-full border border-amber-700 bg-black px-3 py-2"
+              />
+            </label>
+          ))}
           <label className="text-sm">Printed product name
             <input value={productName} onChange={(event) => setProductName(event.target.value)} className="mt-1 block w-full border border-zinc-700 bg-black px-3 py-2" />
           </label>
@@ -187,8 +211,8 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
                 />
                 <h2>{job.productName || jobRecipe.name}</h2>
               </header>
-              <p><strong>Ingredients:</strong> {jobRecipe.ingredientStatement || "Ingredient data incomplete"}</p>
-              {jobRecipe.allergens.length > 0 && <p className="food-label-allergens"><strong>CONTAINS:</strong> {jobRecipe.allergens.join(", ")}</p>}
+              <p><strong>Ingredients:</strong> {job.ingredientStatement || "Ingredient data incomplete"}</p>
+              {job.allergens.length > 0 && <p className="food-label-allergens"><strong>CONTAINS:</strong> {job.allergens.join(", ")}</p>}
               <div className="food-label-dates">
                 <span><strong>Prepared:</strong> {job.preparedDate}</span>
                 <span><strong>Use by:</strong> {job.useByDate}</span>

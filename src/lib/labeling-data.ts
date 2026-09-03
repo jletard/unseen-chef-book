@@ -150,6 +150,7 @@ export async function getLabelingWorkspace(): Promise<{
     const statements = [mainRecipe.ingredientStatement];
     const allergens = new Set(mainRecipe.allergens);
     const incomplete = new Set(mainRecipe.incompleteIngredients);
+    const variableSides: string[] = [];
 
     for (const sideName of defaultSides) {
       const normalizedSideName = normalizeCookbookName(sideName);
@@ -158,6 +159,10 @@ export async function getLabelingWorkspace(): Promise<{
       const side = (sideRecipeId ? recipeLabelById.get(sideRecipeId) : undefined)
         ?? recipeLabelByName.get(normalizedSideName);
       if (!side) {
+        if (normalizedSideName === "seasonal vegetables") {
+          variableSides.push(sideName);
+          continue;
+        }
         incomplete.add(`Missing approved default side: ${sideName}`);
         continue;
       }
@@ -170,6 +175,7 @@ export async function getLabelingWorkspace(): Promise<{
       recipeId: `menu:${menu.id}`,
       name: String(menu.name),
       defaultSides,
+      variableSides,
       ingredientStatement: statements.filter(Boolean).join(", "),
       allergens: Array.from(allergens).sort(),
       incompleteIngredients: Array.from(incomplete).sort(),
