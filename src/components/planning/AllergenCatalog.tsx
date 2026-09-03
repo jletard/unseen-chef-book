@@ -70,12 +70,28 @@ function IngredientAllergenEditor({ ingredient, open, onToggle, onSaved }: {
 
   return (
     <section className="border border-zinc-800 bg-black">
-      <button type="button" onClick={onToggle} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
-        <span className="font-medium">{ingredient.name}</span>
-        <span className={ingredient.reviewStatus === "confirmed" ? "text-sm text-emerald-400" : "text-sm text-amber-300"}>
-          {ingredient.reviewStatus === "confirmed" ? "Confirmed" : "Needs review"}
-        </span>
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">{ingredient.name}</div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {ingredient.allergenKeys.length > 0 ? ingredient.allergenKeys.map((key) => (
+              <span key={key} className="rounded-full border border-amber-700 bg-amber-950/30 px-2 py-1 text-xs font-semibold text-amber-200">
+                {allergenLabels[key]}
+              </span>
+            )) : ingredient.reviewStatus === "confirmed" ? (
+              <span className="rounded-full border border-emerald-800 px-2 py-1 text-xs text-emerald-300">No major allergens</span>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className={ingredient.reviewStatus === "confirmed" ? "text-sm text-emerald-400" : "text-sm text-amber-300"}>
+            {ingredient.reviewStatus === "confirmed" ? "Confirmed" : "Needs review"}
+          </span>
+          <button type="button" onClick={onToggle} className="min-w-28 border border-blue-700 px-3 py-2 text-sm font-semibold text-blue-300">
+            {open ? "Close" : "Edit labeling"}
+          </button>
+        </div>
+      </div>
       {open && (
         <div className="space-y-4 border-t border-zinc-800 p-4">
           <label className="block text-sm text-zinc-300">Label name
@@ -87,14 +103,32 @@ function IngredientAllergenEditor({ ingredient, open, onToggle, onSaved }: {
           </label>
           <fieldset>
             <legend className="text-sm font-medium">Major allergens present as ingredients</legend>
-            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                aria-pressed={keys.length === 0}
+                onClick={() => setKeys([])}
+                className={keys.length === 0
+                  ? "rounded-full border border-emerald-500 bg-emerald-950/40 px-3 py-2 text-sm font-semibold text-emerald-200"
+                  : "rounded-full border border-zinc-700 px-3 py-2 text-sm text-zinc-400"}
+              >
+                No major allergens
+              </button>
               {(Object.entries(allergenLabels) as Array<[AllergenKey, string]>).map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2 border border-zinc-800 px-3 py-2 text-sm">
-                  <input type="checkbox" checked={keys.includes(key)} onChange={(event) => setKeys((current) => event.target.checked ? [...current, key] : current.filter((value) => value !== key))} />
+                <button
+                  type="button"
+                  key={key}
+                  aria-pressed={keys.includes(key)}
+                  onClick={() => setKeys((current) => current.includes(key) ? current.filter((value) => value !== key) : [...current, key])}
+                  className={keys.includes(key)
+                    ? "rounded-full border border-amber-500 bg-amber-950/40 px-3 py-2 text-sm font-semibold text-amber-100"
+                    : "rounded-full border border-zinc-700 px-3 py-2 text-sm text-zinc-400"}
+                >
                   {label}
-                </label>
+                </button>
               ))}
             </div>
+            <p className="mt-2 text-xs text-zinc-500">Click every allergen present in this purchased ingredient. Leave “No major allergens” selected only after checking its package or specification.</p>
           </fieldset>
           {keys.filter((key) => specificSourceKeys.has(key)).map((key) => (
             <label key={key} className="block text-sm text-zinc-300">Specific {allergenLabels[key]} source
