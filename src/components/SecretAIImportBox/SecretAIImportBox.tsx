@@ -194,6 +194,7 @@ type SecretAIImportBoxProps = {
     onImport: (values: Record<string, unknown>) => void | Promise<void>;
     successMessage?: string;
     closeAfterImport?: boolean;
+    initiallyOpen?: boolean;
     disabled?: boolean;
 };
 
@@ -507,9 +508,10 @@ export default function SecretAIImportBox({
     onImport,
     successMessage = "Import successful.",
     closeAfterImport = false,
+    initiallyOpen = false,
     disabled = false,
 }: SecretAIImportBoxProps) {
-    const [isOpen, setIsOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(initiallyOpen);
     const [jsonText, setJsonText] = useState("");
     const [message, setMessage] = useState<string | null>(null);
     const [hasError, setHasError] = useState(false);
