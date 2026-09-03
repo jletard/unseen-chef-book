@@ -514,7 +514,9 @@ function FastReviewWorkspace({
     ambiguousIngredients: string[];
     ambiguousComponents: string[];
     dependencyBlockers: string[];
+    approvedRecipeOptions: Array<{ id: string; name: string; versionId: string }>;
   } | null>(null);
+  const [componentMatches, setComponentMatches] = useState<Record<string, string>>({});
   const [finalizationBusy, setFinalizationBusy] = useState(false);
   const [finalizationError, setFinalizationError] = useState("");
   const stageDrafts = drafts.filter((draft) => draft.reviewBucket === stage);
@@ -562,6 +564,42 @@ function FastReviewWorkspace({
       router.refresh();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Ready drafts could not be finalized.";
+      setFinalizationError(errorMessage);
+      setMessage(errorMessage);
+    } finally {
+      setFinalizationBusy(false);
+    }
+  }
+
+  async function saveComponentMatch(missingName: string) {
+    const recipeId = componentMatches[missingName];
+    if (!recipeId) {
+      setFinalizationError(`Choose the approved recipe that “${missingName}” should use.`);
+      return;
+    }
+    setFinalizationBusy(true);
+    setFinalizationError("");
+    try {
+      const response = await fetch("/api/reconciliation/finalize", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ missingName, recipeId }),
+      });
+      const result = await response.json() as { error?: string; matchedDraftCount?: number; recipeName?: string };
+      if (!response.ok) throw new Error(result.error ?? "Component match could not be saved.");
+      setMessage(
+        `Matched “${missingName}” to “${result.recipeName}” in ${result.matchedDraftCount ?? 0} Ready ` +
+        `${result.matchedDraftCount === 1 ? "draft" : "drafts"}.`,
+      );
+      setComponentMatches((current) => {
+        const next = { ...current };
+        delete next[missingName];
+        return next;
+      });
+      await previewFinalization();
+      router.refresh();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Component match could not be saved.";
       setFinalizationError(errorMessage);
       setMessage(errorMessage);
     } finally {
@@ -770,8 +808,37 @@ function FastReviewWorkspace({
                 </div>
               )}
               {finalizationPreview.dependencyBlockers.length > 0 && (
-                <div className="mt-2 text-red-300">
-                  Missing approved components: {finalizationPreview.dependencyBlockers.join(" · ")}
+                <div className="mt-3 border border-red-900 bg-red-950/10 p-3">
+                  <div className="font-medium text-red-300">Match missing component references</div>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    Choose the existing approved recipe each Ready draft should reference. This changes the reference; it does not create another recipe.
+                  </p>
+                  <div className="mt-3 grid gap-3">
+                    {finalizationPreview.dependencyBlockers.map((name) => (
+                      <div key={name} className="grid gap-2 sm:grid-cols-[minmax(12rem,1fr)_minmax(14rem,2fr)_auto] sm:items-center">
+                        <span className="text-red-200">{name}</span>
+                        <select
+                          value={componentMatches[name] ?? ""}
+                          onChange={(event) => setComponentMatches((current) => ({ ...current, [name]: event.target.value }))}
+                          disabled={finalizationBusy}
+                          className="min-w-0 border border-zinc-700 bg-black px-3 py-2 text-white disabled:opacity-40"
+                        >
+                          <option value="">Select approved recipe…</option>
+                          {finalizationPreview.approvedRecipeOptions.map((recipe) => (
+                            <option key={recipe.id} value={recipe.id}>{recipe.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => saveComponentMatch(name)}
+                          disabled={finalizationBusy || !componentMatches[name]}
+                          className="border border-amber-600 px-3 py-2 font-medium text-amber-200 disabled:opacity-40"
+                        >
+                          Save match
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               <div className="mt-3 flex justify-end gap-2">
