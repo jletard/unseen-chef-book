@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { allergenLabels, type AllergenKey, type LabelIngredient } from "@/lib/labeling-types";
 
 const allergenEntries = Object.entries(allergenLabels) as Array<[AllergenKey, string]>;
-const specificSourceKeys = new Set<AllergenKey>(["fish", "crustacean_shellfish", "tree_nuts"]);
 
 export default function AllergenCatalog({ ingredients }: { ingredients: LabelIngredient[] }) {
   const router = useRouter();
@@ -27,7 +26,7 @@ export default function AllergenCatalog({ ingredients }: { ingredients: LabelIng
   function saveAllChanges() {
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-allergen-save-dirty="true"]'));
     if (buttons.length === 0) {
-      setSaveAllMessage("No unsaved changes.");
+      setSaveAllMessage("Nothing visible needs review and there are no unsaved changes.");
       return;
     }
     setSaveAllMessage(`Saving ${buttons.length} changed ${buttons.length === 1 ? "ingredient" : "ingredients"}…`);
@@ -66,7 +65,7 @@ export default function AllergenCatalog({ ingredients }: { ingredients: LabelIng
       {shownCount === 0 && <p className="border border-zinc-800 p-4 text-zinc-400">No ingredients match this filter.</p>}
       {ingredients.map((ingredient) => (
         <div key={ingredient.id} className={isShown(ingredient) ? "block" : "hidden"}>
-          <IngredientFlags ingredient={ingredient} editMode={editMode} onSaved={() => router.refresh()} />
+          <IngredientFlags ingredient={ingredient} editMode={editMode} visible={isShown(ingredient)} onSaved={() => router.refresh()} />
         </div>
       ))}
 
@@ -82,11 +81,11 @@ export default function AllergenCatalog({ ingredients }: { ingredients: LabelIng
   );
 }
 
-function IngredientFlags({ ingredient, editMode, onSaved }: { ingredient: LabelIngredient; editMode: boolean; onSaved: () => void }) {
+function IngredientFlags({ ingredient, editMode, visible, onSaved }: { ingredient: LabelIngredient; editMode: boolean; visible: boolean; onSaved: () => void }) {
   const [labelName, setLabelName] = useState(ingredient.labelName);
   const [statement, setStatement] = useState(ingredient.ingredientStatement);
   const [keys, setKeys] = useState<AllergenKey[]>(ingredient.allergenKeys);
-  const [details, setDetails] = useState(ingredient.allergenDetails);
+  const details = ingredient.allergenDetails;
   const [vegetarian, setVegetarian] = useState(ingredient.dietaryFlags.includes("vegetarian"));
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -128,7 +127,7 @@ function IngredientFlags({ ingredient, editMode, onSaved }: { ingredient: LabelI
     }
   }
 
-  const missingSpecificSource = keys.some((key) => specificSourceKeys.has(key) && !details[key]?.trim());
+  const needsBulkSave = dirty || (visible && ingredient.reviewStatus !== "confirmed");
 
   return (
     <section className="border border-zinc-800 bg-black p-3 sm:p-4">
@@ -172,17 +171,6 @@ function IngredientFlags({ ingredient, editMode, onSaved }: { ingredient: LabelI
 
       {editMode && (
         <div className="mt-3 border-t border-zinc-800 pt-3">
-          {keys.filter((key) => specificSourceKeys.has(key)).map((key) => (
-            <label key={key} className="mb-3 block text-sm text-zinc-300">Specific {allergenLabels[key]} source
-              <input
-                value={details[key] ?? ""}
-                onChange={(event) => { setDetails((current) => ({ ...current, [key]: event.target.value })); setDirty(true); setMessage("Unsaved changes"); }}
-                placeholder={key === "fish" ? "e.g. tilapia" : key === "tree_nuts" ? "e.g. almond" : "e.g. shrimp"}
-                className="mt-1 block w-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-white"
-              />
-            </label>
-          ))}
-
           <button type="button" onClick={() => setDetailsOpen((current) => !current)} className="border border-zinc-700 px-3 py-2 text-sm text-zinc-300">
             {detailsOpen ? "Hide ingredient wording" : "Edit ingredient wording"}
           </button>
@@ -202,10 +190,10 @@ function IngredientFlags({ ingredient, editMode, onSaved }: { ingredient: LabelI
             <button type="button" disabled={busy} onClick={() => save(false)} className="border border-zinc-600 px-4 py-2 disabled:opacity-40">Save</button>
             <button
               type="button"
-              disabled={busy || missingSpecificSource}
+              disabled={busy}
               onClick={() => save(true)}
-              data-allergen-save-dirty={dirty && !missingSpecificSource ? "true" : "false"}
-              className="border border-emerald-600 px-4 py-2 font-semibold text-emerald-300 disabled:opacity-40"
+              data-allergen-save-dirty={needsBulkSave ? "true" : "false"}
+              className="border border-emerald-500 bg-emerald-950/40 px-4 py-2 font-semibold text-emerald-200 disabled:opacity-40"
             >
               Save &amp; mark reviewed
             </button>
