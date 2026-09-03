@@ -11,13 +11,43 @@ const specificSourceKeys = new Set<AllergenKey>(["fish", "crustacean_shellfish",
 export default function AllergenCatalog({ ingredients }: { ingredients: LabelIngredient[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [reviewFilter, setReviewFilter] = useState<"all" | "needs_review" | "reviewed">("all");
   const [editMode, setEditMode] = useState(false);
-  const shown = ingredients.filter((item) => item.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const [saveAllMessage, setSaveAllMessage] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const isShown = (item: LabelIngredient) => {
+    const matchesQuery = item.name.toLowerCase().includes(normalizedQuery);
+    const matchesReview = reviewFilter === "all"
+      || (reviewFilter === "reviewed" && item.reviewStatus === "confirmed")
+      || (reviewFilter === "needs_review" && item.reviewStatus !== "confirmed");
+    return matchesQuery && matchesReview;
+  };
+  const shownCount = ingredients.filter(isShown).length;
+
+  function saveAllChanges() {
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-allergen-save-dirty="true"]'));
+    if (buttons.length === 0) {
+      setSaveAllMessage("No unsaved changes.");
+      return;
+    }
+    setSaveAllMessage(`Saving ${buttons.length} changed ${buttons.length === 1 ? "ingredient" : "ingredients"}…`);
+    buttons.forEach((button) => button.click());
+  }
 
   return (
     <div className="mt-6 space-y-4">
-      <div className="sticky top-0 z-10 grid gap-3 border border-zinc-700 bg-zinc-950 p-3 shadow-xl sm:grid-cols-[1fr_auto_auto] sm:p-4">
+      <div className="sticky top-0 z-10 grid gap-3 border border-zinc-700 bg-zinc-950 p-3 shadow-xl sm:grid-cols-[1fr_auto_auto_auto] sm:p-4">
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search purchased ingredients" className="border border-zinc-700 bg-black px-3 py-2" />
+        <select
+          value={reviewFilter}
+          onChange={(event) => setReviewFilter(event.target.value as "all" | "needs_review" | "reviewed")}
+          aria-label="Filter by review status"
+          className="border border-zinc-700 bg-black px-3 py-2"
+        >
+          <option value="all">All ingredients</option>
+          <option value="needs_review">Needs review</option>
+          <option value="reviewed">Reviewed</option>
+        </select>
         <div className="self-center text-sm text-zinc-400">
           {ingredients.filter((item) => item.reviewStatus === "confirmed").length} of {ingredients.length} reviewed
         </div>
@@ -33,9 +63,21 @@ export default function AllergenCatalog({ ingredients }: { ingredients: LabelIng
         </button>
       </div>
 
-      {shown.map((ingredient) => (
-        <IngredientFlags key={ingredient.id} ingredient={ingredient} editMode={editMode} onSaved={() => router.refresh()} />
+      {shownCount === 0 && <p className="border border-zinc-800 p-4 text-zinc-400">No ingredients match this filter.</p>}
+      {ingredients.map((ingredient) => (
+        <div key={ingredient.id} className={isShown(ingredient) ? "block" : "hidden"}>
+          <IngredientFlags ingredient={ingredient} editMode={editMode} onSaved={() => router.refresh()} />
+        </div>
       ))}
+
+      {editMode && (
+        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-3 border border-zinc-700 bg-zinc-950 p-3 shadow-2xl sm:p-4">
+          {saveAllMessage && <span className="text-sm text-zinc-400">{saveAllMessage}</span>}
+          <button type="button" onClick={saveAllChanges} className="border border-emerald-500 bg-emerald-950/40 px-5 py-3 font-bold text-emerald-200">
+            Save all changes
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -47,12 +89,14 @@ function IngredientFlags({ ingredient, editMode, onSaved }: { ingredient: LabelI
   const [details, setDetails] = useState(ingredient.allergenDetails);
   const [vegetarian, setVegetarian] = useState(ingredient.dietaryFlags.includes("vegetarian"));
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
   function toggleKey(key: AllergenKey) {
     if (!editMode || busy) return;
     setKeys((current) => current.includes(key) ? current.filter((value) => value !== key) : [...current, key]);
+    setDirty(true);
     setMessage("Unsaved changes");
   }
 
@@ -75,6 +119,7 @@ function IngredientFlags({ ingredient, editMode, onSaved }: { ingredient: LabelI
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || "Save failed.");
       setMessage(confirmed ? "Reviewed" : "Saved");
+      setDirty(false);
       onSaved();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Save failed.");
@@ -116,7 +161,7 @@ function IngredientFlags({ ingredient, editMode, onSaved }: { ingredient: LabelI
           type="button"
           disabled={!editMode || busy}
           aria-pressed={vegetarian}
-          onClick={() => { setVegetarian((current) => !current); setMessage("Unsaved changes"); }}
+          onClick={() => { setVegetarian((current) => !current); setDirty(true); setMessage("Unsaved changes"); }}
           className={vegetarian
             ? "min-h-12 border border-emerald-500 bg-emerald-950/50 px-2 py-2 text-xs font-bold text-emerald-100 disabled:opacity-100"
             : "min-h-12 border border-zinc-700 px-2 py-2 text-xs text-zinc-500 disabled:opacity-100"}
@@ -131,7 +176,7 @@ function IngredientFlags({ ingredient, editMode, onSaved }: { ingredient: LabelI
             <label key={key} className="mb-3 block text-sm text-zinc-300">Specific {allergenLabels[key]} source
               <input
                 value={details[key] ?? ""}
-                onChange={(event) => { setDetails((current) => ({ ...current, [key]: event.target.value })); setMessage("Unsaved changes"); }}
+                onChange={(event) => { setDetails((current) => ({ ...current, [key]: event.target.value })); setDirty(true); setMessage("Unsaved changes"); }}
                 placeholder={key === "fish" ? "e.g. tilapia" : key === "tree_nuts" ? "e.g. almond" : "e.g. shrimp"}
                 className="mt-1 block w-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-white"
               />
@@ -144,10 +189,10 @@ function IngredientFlags({ ingredient, editMode, onSaved }: { ingredient: LabelI
           {detailsOpen && (
             <div className="mt-3 grid gap-3">
               <label className="block text-sm text-zinc-300">Label name
-                <input value={labelName} onChange={(event) => { setLabelName(event.target.value); setMessage("Unsaved changes"); }} className="mt-1 block w-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-white" />
+                <input value={labelName} onChange={(event) => { setLabelName(event.target.value); setDirty(true); setMessage("Unsaved changes"); }} className="mt-1 block w-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-white" />
               </label>
               <label className="block text-sm text-zinc-300">Ingredient declaration
-                <textarea value={statement} onChange={(event) => { setStatement(event.target.value); setMessage("Unsaved changes"); }} rows={3} className="mt-1 block w-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-white" />
+                <textarea value={statement} onChange={(event) => { setStatement(event.target.value); setDirty(true); setMessage("Unsaved changes"); }} rows={3} className="mt-1 block w-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-white" />
                 <span className="mt-1 block text-xs text-zinc-500">For a commercial compound food, copy its ingredients and subingredients from the supplier label.</span>
               </label>
             </div>
@@ -155,7 +200,15 @@ function IngredientFlags({ ingredient, editMode, onSaved }: { ingredient: LabelI
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button type="button" disabled={busy} onClick={() => save(false)} className="border border-zinc-600 px-4 py-2 disabled:opacity-40">Save</button>
-            <button type="button" disabled={busy || missingSpecificSource} onClick={() => save(true)} className="border border-emerald-600 px-4 py-2 font-semibold text-emerald-300 disabled:opacity-40">Save &amp; mark reviewed</button>
+            <button
+              type="button"
+              disabled={busy || missingSpecificSource}
+              onClick={() => save(true)}
+              data-allergen-save-dirty={dirty && !missingSpecificSource ? "true" : "false"}
+              className="border border-emerald-600 px-4 py-2 font-semibold text-emerald-300 disabled:opacity-40"
+            >
+              Save &amp; mark reviewed
+            </button>
             {message && <span className="text-sm text-zinc-400">{message}</span>}
           </div>
         </div>
