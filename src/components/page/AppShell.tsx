@@ -25,12 +25,12 @@ export default function AppShell({
       productionWeeks={productionWeeks}
       initialProductionWeek={initialProductionWeek}
     >
-      <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
+      <div className="flex min-h-screen min-w-0 max-w-full flex-col overflow-x-hidden bg-zinc-950 text-zinc-100">
         <PageHeader userName={userName} />
 
         <AppNavigation />
 
-        <main className="mx-auto w-full max-w-screen-2xl flex-1 p-3 md:p-4">
+        <main className="mx-auto min-w-0 w-full max-w-screen-2xl flex-1 overflow-x-clip p-3 md:p-4">
           {children}
         </main>
 

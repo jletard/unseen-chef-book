@@ -562,19 +562,19 @@ export default function SecretAIImportBox({
     return (
         <>
             {!isOpen ? (
-                <div className="flex items-center">
+                <div className="flex min-w-0 items-center">
                     <button
                         type="button"
                         onClick={() => setIsOpen(true)}
                         disabled={disabled}
                         title="Secret AI Import Box™"
-                        className="rounded-md border border-gray-700 bg-gray-950 px-2 py-1 text-xs font-semibold text-gray-400 transition-colors hover:border-purple-700 hover:text-purple-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="min-h-11 rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-sm font-semibold text-gray-300 transition-colors hover:border-purple-700 hover:text-purple-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         AI+
                     </button>
                 </div>
             ) : (
-                <div className="rounded-lg border border-purple-900/70 bg-purple-950/20">
+                <div className="min-w-0 max-w-full overflow-hidden rounded-lg border border-purple-900/70 bg-purple-950/20">
                     <div className="flex flex-wrap items-center gap-2 p-3">
                         <button
                             type="button"
@@ -619,7 +619,7 @@ export default function SecretAIImportBox({
                             disabled={disabled}
                             rows={10}
                             spellCheck={false}
-                            className="w-full resize-y rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 font-mono text-sm text-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="block min-h-44 w-full max-w-full resize-y rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 font-mono text-base text-gray-200 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
                             placeholder={'{\n  "title": "..."\n}'}
                         />
 

@@ -690,7 +690,7 @@ function FastReviewWorkspace({
   ];
 
   return (
-    <section className="mt-6 border border-zinc-800 bg-zinc-950 p-4">
+    <section className="mt-6 min-w-0 max-w-full overflow-x-clip border border-zinc-800 bg-zinc-950 p-3 sm:p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Fast draft review</h2>
@@ -761,7 +761,7 @@ function FastReviewWorkspace({
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex max-w-full flex-wrap gap-2">
         {tabs.map((tab) => {
           const count = drafts.filter((draft) => draft.reviewBucket === tab.bucket).length;
           return (
@@ -833,7 +833,7 @@ function DraftReviewCard({
     : [];
 
   return (
-    <article className="mt-4 border border-zinc-700 bg-black p-4">
+    <article className="mt-4 min-w-0 max-w-full overflow-x-clip border border-zinc-700 bg-black p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-xs uppercase text-zinc-500">{position} of {total}</div>
@@ -842,7 +842,7 @@ function DraftReviewCard({
             {draft.inlineComponent ? "Inline component" : "Production recipe"} · {draft.recipeCategory} · {draft.itemCount} items · {draft.stepCount} steps
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex max-w-full flex-wrap gap-2">
           {total > 1 && (
             <>
               <button type="button" onClick={onPrevious} className="border border-zinc-700 px-3 py-2 text-sm">Previous</button>
@@ -884,8 +884,8 @@ function DraftReviewCard({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <div>
+      <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
+        <div className="min-w-0">
           <h4 className="text-sm font-semibold text-zinc-300">Ingredients and components</h4>
           <div className="mt-2 divide-y divide-zinc-900 border border-zinc-800">
             {items.map((item, index) => (
@@ -903,7 +903,7 @@ function DraftReviewCard({
             ))}
           </div>
         </div>
-        <div>
+        <div className="min-w-0">
           <h4 className="text-sm font-semibold text-zinc-300">Method</h4>
           <ol className="mt-2 list-decimal space-y-2 border border-zinc-800 px-8 py-3 text-sm text-zinc-300">
             {steps.map((step, index) => <li key={index}>{String(step.instruction ?? "")}</li>)}
@@ -1008,7 +1008,7 @@ function DraftQuickEditor({
   }
 
   return (
-    <div className="mt-5 border-t border-zinc-800 pt-5">
+    <div className="mt-5 min-w-0 max-w-full border-t border-zinc-800 pt-5">
       <h4 className="text-base font-semibold">Edit this draft</h4>
       <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <CompactField label="Recipe name" value={String(payload.name ?? "")} onChange={(value) => setField("name", value)} />
