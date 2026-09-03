@@ -147,7 +147,11 @@ export async function getLabelingWorkspace(): Promise<{
 
     menuLinkedRecipeIds.add(mainRecipe.recipeId);
     const defaultSides = ((menu.sides ?? []) as string[]).map(String).filter((name: string) => name.trim());
-    const statements = [mainRecipe.ingredientStatement];
+    const statements = [
+      mainRecipe.ingredientStatement
+        ? `${mainRecipe.name}: ${mainRecipe.ingredientStatement}`
+        : mainRecipe.name,
+    ];
     const allergens = new Set(mainRecipe.allergens);
     const incomplete = new Set(mainRecipe.incompleteIngredients);
     const variableSides: string[] = [];
@@ -166,7 +170,9 @@ export async function getLabelingWorkspace(): Promise<{
         incomplete.add(`Missing approved default side: ${sideName}`);
         continue;
       }
-      statements.push(`${side.name} (${side.ingredientStatement})`);
+      statements.push(
+        side.ingredientStatement ? `${side.name}: ${side.ingredientStatement}` : side.name,
+      );
       side.allergens.forEach((value) => allergens.add(value));
       side.incompleteIngredients.forEach((value) => incomplete.add(value));
     }
@@ -176,7 +182,7 @@ export async function getLabelingWorkspace(): Promise<{
       name: String(menu.name),
       defaultSides,
       variableSides,
-      ingredientStatement: statements.filter(Boolean).join(", "),
+      ingredientStatement: statements.filter(Boolean).join("; "),
       allergens: Array.from(allergens).sort(),
       incompleteIngredients: Array.from(incomplete).sort(),
     });

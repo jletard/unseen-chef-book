@@ -85,7 +85,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
   function addToSheet() {
     if (!recipe || !currentLabelValid) return;
     const variableStatements = (recipe.variableSides ?? []).map(
-      (side) => `${side} (${variableSideIngredients[side].trim()})`,
+      (side) => `${side}: ${variableSideIngredients[side].trim()}`,
     );
     setLabelJobs((current) => [
       ...current,
@@ -98,7 +98,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
         preparedDate,
         useByDate,
         copies: Math.max(1, Math.floor(copies)),
-        ingredientStatement: [recipe.ingredientStatement, ...variableStatements].filter(Boolean).join(", "),
+        ingredientStatement: [recipe.ingredientStatement, ...variableStatements].filter(Boolean).join("; "),
         allergens: recipe.allergens,
       },
     ]);
