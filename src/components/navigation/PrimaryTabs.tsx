@@ -16,7 +16,7 @@ export default function PrimaryTabs() {
       className="border-b border-zinc-800 bg-zinc-950"
       data-print-hidden="true"
     >
-      <div className="mx-auto flex w-full max-w-screen-2xl overflow-x-auto px-3 md:px-4">
+      <div className="mx-auto flex w-full max-w-screen-2xl snap-x overflow-x-auto px-1 md:px-4">
         {navigationSections.map((section) => {
           const isActive = pathname.startsWith(section.matchPath);
 
@@ -25,7 +25,7 @@ export default function PrimaryTabs() {
               key={section.href}
               href={section.href}
               className={[
-                "shrink-0 border-b-2 px-3 py-2 text-sm font-medium",
+                "shrink-0 snap-start border-b-2 px-3 py-2 text-sm font-medium",
                 isActive
                   ? "border-zinc-100 text-zinc-100"
                   : "border-transparent text-zinc-400 hover:text-zinc-200",

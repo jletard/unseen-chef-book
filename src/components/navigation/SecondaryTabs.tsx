@@ -24,7 +24,7 @@ export default function SecondaryTabs() {
       className="border-b border-zinc-800 bg-zinc-900/40"
       data-print-hidden="true"
     >
-      <div className="mx-auto flex w-full max-w-screen-2xl overflow-x-auto px-3 md:px-4">
+      <div className="mx-auto flex w-full max-w-screen-2xl snap-x overflow-x-auto px-1 md:px-4">
         {activeSection.children.map((item) => {
           const isActive = pathname === item.href;
 
@@ -33,7 +33,7 @@ export default function SecondaryTabs() {
               key={item.href}
               href={item.href}
               className={[
-                "shrink-0 border-b-2 px-3 py-1.5 text-xs font-medium",
+                "shrink-0 snap-start border-b-2 px-3 py-1.5 text-xs font-medium",
                 isActive
                   ? "border-zinc-300 text-zinc-100"
                   : "border-transparent text-zinc-500 hover:text-zinc-300",

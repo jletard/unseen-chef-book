@@ -160,7 +160,40 @@ export default function MenuItemCatalog({
         </p>
       ) : null}
 
-      <div className="overflow-x-auto border border-zinc-800">
+      <div className="space-y-3 md:hidden">
+        {sortedItems.map((item) => {
+          const itemLinks = links.filter((link) => link.menuItemId === item.id);
+          const linkedRecipes = itemLinks
+            .map((link) => recipesById.get(link.recipeId))
+            .filter((recipe): recipe is RecipeRecord => Boolean(recipe));
+          return (
+            <article key={item.id} className="border border-zinc-800 bg-black p-4">
+              <h2 className="font-semibold text-zinc-100">{item.shortName || item.name}</h2>
+              {item.description && <p className="mt-1 text-sm text-zinc-400">{item.description}</p>}
+              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                <div><dt className="text-xs uppercase text-zinc-500">Type</dt><dd>{label(item.menuType)}</dd></div>
+                <div><dt className="text-xs uppercase text-zinc-500">Protein</dt><dd>{item.proteinType || "—"}</dd></div>
+                <div className="col-span-2"><dt className="text-xs uppercase text-zinc-500">Category</dt><dd>{item.category || "—"}</dd></div>
+                <div className="col-span-2"><dt className="text-xs uppercase text-zinc-500">Default sides</dt><dd>{item.sides.length ? item.sides.join(" · ") : "—"}</dd></div>
+                <div className="col-span-2">
+                  <dt className="text-xs uppercase text-zinc-500">Recipes</dt>
+                  <dd>{linkedRecipes.length ? linkedRecipes.map((recipe) => recipe.name).join(" · ") : "Not defined"}</dd>
+                </div>
+              </dl>
+              <button
+                type="button"
+                disabled={busyId !== null}
+                onClick={() => openRecipe(item, itemLinks)}
+                className="mt-4 w-full border border-blue-500 px-3 py-2 font-medium disabled:opacity-40"
+              >
+                {busyId === item.id ? "Opening..." : itemLinks.length ? "Open Recipe" : "Create Recipe"}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto border border-zinc-800 md:block">
         <table className="w-full min-w-[1000px] border-collapse text-sm">
           <thead className="bg-zinc-950 text-left text-xs uppercase tracking-wide text-zinc-500">
             <tr>

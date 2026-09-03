@@ -403,7 +403,31 @@ export default function ReconciliationDashboardV2({
           </button>
         </div>
 
-        <div className="mt-3 overflow-x-auto border border-zinc-800">
+        <div className="mt-3 space-y-2 md:hidden">
+          {visibleQueue.map((row) => (
+            <label key={row.id} className="flex items-start gap-3 border border-zinc-800 bg-black p-3">
+              <input
+                type="checkbox"
+                checked={selectedIds.has(row.productionItemId)}
+                onChange={() => toggle(row.productionItemId)}
+                aria-label={`Select ${row.name}`}
+                className="mt-1 size-5 shrink-0"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium">{row.name}</span>
+                <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                  <span className="text-zinc-400">{kindLabels[row.kind] ?? row.kind}</span>
+                  <span className={row.active ? "text-emerald-400" : "text-zinc-500"}>
+                    {row.active ? "Active" : "Inactive"}
+                  </span>
+                  <span className="text-amber-300">Needs recipe</span>
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div className="mt-3 hidden overflow-x-auto border border-zinc-800 md:block">
           <table className="w-full min-w-3xl text-left text-sm">
             <thead className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
               <tr>
