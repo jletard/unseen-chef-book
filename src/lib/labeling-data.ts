@@ -155,8 +155,32 @@ export async function getLabelingWorkspace(): Promise<{
     const allergens = new Set(mainRecipe.allergens);
     const incomplete = new Set(mainRecipe.incompleteIngredients);
     const variableSides: string[] = [];
+    const selectableSides: NonNullable<RecipeLabel["selectableSides"]> = [];
 
     for (const sideName of defaultSides) {
+      const optionNames = sideName.split(/\s+or\s+/iu).map((name) => name.trim()).filter(Boolean);
+      if (optionNames.length > 1) {
+        const options = optionNames.map((optionName) => {
+          const normalizedOptionName = normalizeCookbookName(optionName);
+          const optionProductionItemId = productionItemBySourceName.get(normalizedOptionName);
+          const optionRecipeId = optionProductionItemId ? recipeIdByProductionItem.get(optionProductionItemId) : undefined;
+          return (optionRecipeId ? recipeLabelById.get(optionRecipeId) : undefined)
+            ?? recipeLabelByName.get(normalizedOptionName);
+        });
+        if (options.every((option): option is RecipeLabel => Boolean(option))) {
+          selectableSides.push({
+            label: sideName,
+            options: options.map((option) => ({
+              recipeId: option.recipeId,
+              name: option.name,
+              ingredientStatement: option.ingredientStatement,
+              allergens: option.allergens,
+              incompleteIngredients: option.incompleteIngredients,
+            })),
+          });
+          continue;
+        }
+      }
       const normalizedSideName = normalizeCookbookName(sideName);
       const sideProductionItemId = productionItemBySourceName.get(normalizedSideName);
       const sideRecipeId = sideProductionItemId ? recipeIdByProductionItem.get(sideProductionItemId) : undefined;
@@ -182,6 +206,7 @@ export async function getLabelingWorkspace(): Promise<{
       name: String(menu.name),
       defaultSides,
       variableSides,
+      selectableSides,
       ingredientStatement: statements.filter(Boolean).join("; "),
       allergens: Array.from(allergens).sort(),
       incompleteIngredients: Array.from(incomplete).sort(),
