@@ -28,6 +28,16 @@ export type RecipeLabel = {
   name: string;
   defaultSides?: string[];
   variableSides?: string[];
+  selectableSides?: Array<{
+    label: string;
+    options: Array<{
+      recipeId: string;
+      name: string;
+      ingredientStatement: string;
+      allergens: string[];
+      incompleteIngredients: string[];
+    }>;
+  }>;
   ingredientStatement: string;
   allergens: string[];
   incompleteIngredients: string[];
