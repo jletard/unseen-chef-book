@@ -19,6 +19,7 @@ export type LabelIngredient = {
   ingredientStatement: string;
   allergenKeys: AllergenKey[];
   allergenDetails: Partial<Record<AllergenKey, string>>;
+  dietaryFlags: Array<"vegetarian">;
   reviewStatus: "unreviewed" | "confirmed";
 };
 
@@ -29,4 +30,3 @@ export type RecipeLabel = {
   allergens: string[];
   incompleteIngredients: string[];
 };
-
