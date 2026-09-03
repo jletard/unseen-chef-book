@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { allergenLabels, type AllergenKey, type LabelIngredient } from "@/lib/labeling-types";
@@ -13,6 +13,8 @@ export default function AllergenCatalog({ ingredients }: { ingredients: LabelIng
   const [reviewFilter, setReviewFilter] = useState<"all" | "needs_review" | "reviewed">("all");
   const [editMode, setEditMode] = useState(false);
   const [saveAllMessage, setSaveAllMessage] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [pendingUpdates, setPendingUpdates] = useState<Record<string, LabelingUpdate>>({});
   const normalizedQuery = query.trim().toLowerCase();
   const isShown = (item: LabelIngredient) => {
     const matchesQuery = item.name.toLowerCase().includes(normalizedQuery);
@@ -23,14 +25,49 @@ export default function AllergenCatalog({ ingredients }: { ingredients: LabelIng
   };
   const shownCount = ingredients.filter(isShown).length;
 
-  function saveAllChanges() {
-    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-allergen-save-dirty="true"]'));
-    if (buttons.length === 0) {
+  const recordPendingUpdate = useCallback((update: LabelingUpdate) => {
+    setPendingUpdates((current) => ({ ...current, [update.id]: update }));
+  }, []);
+
+  const recordSaved = useCallback((ingredientId: string) => {
+    setPendingUpdates((current) => {
+      const next = { ...current };
+      delete next[ingredientId];
+      return next;
+    });
+    router.refresh();
+  }, [router]);
+
+  async function saveAllChanges() {
+    const targets = ingredients
+      .filter((ingredient) => isShown(ingredient) && (ingredient.reviewStatus !== "confirmed" || pendingUpdates[ingredient.id]))
+      .map((ingredient) => pendingUpdates[ingredient.id] ?? updateFromIngredient(ingredient));
+    if (targets.length === 0) {
       setSaveAllMessage("Nothing visible needs review and there are no unsaved changes.");
       return;
     }
-    setSaveAllMessage(`Saving ${buttons.length} changed ${buttons.length === 1 ? "ingredient" : "ingredients"}…`);
-    buttons.forEach((button) => button.click());
+    setBulkSaving(true);
+    setSaveAllMessage(`Saving ${targets.length} ${targets.length === 1 ? "ingredient" : "ingredients"}…`);
+    try {
+      const response = await fetch("/api/ingredients/labeling/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates: targets.map((target) => ({ ...target, confirmed: true })) }),
+      });
+      const result = await response.json() as { savedCount?: number; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Bulk save failed.");
+      setPendingUpdates((current) => {
+        const next = { ...current };
+        targets.forEach((target) => delete next[target.id]);
+        return next;
+      });
+      setSaveAllMessage(`Saved and reviewed ${result.savedCount ?? targets.length} ingredients.`);
+      router.refresh();
+    } catch (error) {
+      setSaveAllMessage(error instanceof Error ? error.message : "Bulk save failed. No completed changes were discarded.");
+    } finally {
+      setBulkSaving(false);
+    }
   }
 
   return (
@@ -65,15 +102,20 @@ export default function AllergenCatalog({ ingredients }: { ingredients: LabelIng
       {shownCount === 0 && <p className="border border-zinc-800 p-4 text-zinc-400">No ingredients match this filter.</p>}
       {ingredients.map((ingredient) => (
         <div key={ingredient.id} className={isShown(ingredient) ? "block" : "hidden"}>
-          <IngredientFlags ingredient={ingredient} editMode={editMode} visible={isShown(ingredient)} onSaved={() => router.refresh()} />
+          <IngredientFlags
+            ingredient={ingredient}
+            editMode={editMode}
+            onChanged={recordPendingUpdate}
+            onSaved={recordSaved}
+          />
         </div>
       ))}
 
       {editMode && (
         <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-3 border border-zinc-700 bg-zinc-950 p-3 shadow-2xl sm:p-4">
           {saveAllMessage && <span className="text-sm text-zinc-400">{saveAllMessage}</span>}
-          <button type="button" onClick={saveAllChanges} className="border border-emerald-500 bg-emerald-950/40 px-5 py-3 font-bold text-emerald-200">
-            Save all changes
+          <button type="button" disabled={bulkSaving} onClick={saveAllChanges} className="border border-emerald-500 bg-emerald-950/40 px-5 py-3 font-bold text-emerald-200 disabled:opacity-40">
+            {bulkSaving ? "Saving…" : "Save all changes"}
           </button>
         </div>
       )}
@@ -81,7 +123,29 @@ export default function AllergenCatalog({ ingredients }: { ingredients: LabelIng
   );
 }
 
-function IngredientFlags({ ingredient, editMode, visible, onSaved }: { ingredient: LabelIngredient; editMode: boolean; visible: boolean; onSaved: () => void }) {
+type LabelingUpdate = {
+  id: string;
+  labelName: string;
+  ingredientStatement: string;
+  allergenKeys: AllergenKey[];
+  allergenDetails: Partial<Record<AllergenKey, string>>;
+  dietaryFlags: string[];
+  confirmed: boolean;
+};
+
+function updateFromIngredient(ingredient: LabelIngredient): LabelingUpdate {
+  return {
+    id: ingredient.id,
+    labelName: ingredient.labelName,
+    ingredientStatement: ingredient.ingredientStatement,
+    allergenKeys: ingredient.allergenKeys,
+    allergenDetails: ingredient.allergenDetails,
+    dietaryFlags: ingredient.dietaryFlags,
+    confirmed: true,
+  };
+}
+
+function IngredientFlags({ ingredient, editMode, onChanged, onSaved }: { ingredient: LabelIngredient; editMode: boolean; onChanged: (update: LabelingUpdate) => void; onSaved: (ingredientId: string) => void }) {
   const [labelName, setLabelName] = useState(ingredient.labelName);
   const [statement, setStatement] = useState(ingredient.ingredientStatement);
   const [keys, setKeys] = useState<AllergenKey[]>(ingredient.allergenKeys);
@@ -91,6 +155,19 @@ function IngredientFlags({ ingredient, editMode, visible, onSaved }: { ingredien
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!dirty) return;
+    onChanged({
+      id: ingredient.id,
+      labelName,
+      ingredientStatement: statement,
+      allergenKeys: keys,
+      allergenDetails: details,
+      dietaryFlags: vegetarian ? ["vegetarian"] : [],
+      confirmed: true,
+    });
+  }, [details, dirty, ingredient.id, keys, labelName, onChanged, statement, vegetarian]);
 
   function toggleKey(key: AllergenKey) {
     if (!editMode || busy) return;
@@ -119,15 +196,13 @@ function IngredientFlags({ ingredient, editMode, visible, onSaved }: { ingredien
       if (!response.ok) throw new Error(result.error || "Save failed.");
       setMessage(confirmed ? "Reviewed" : "Saved");
       setDirty(false);
-      onSaved();
+      onSaved(ingredient.id);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Save failed.");
     } finally {
       setBusy(false);
     }
   }
-
-  const needsBulkSave = dirty || (visible && ingredient.reviewStatus !== "confirmed");
 
   return (
     <section className="border border-zinc-800 bg-black p-3 sm:p-4">
@@ -192,7 +267,6 @@ function IngredientFlags({ ingredient, editMode, visible, onSaved }: { ingredien
               type="button"
               disabled={busy}
               onClick={() => save(true)}
-              data-allergen-save-dirty={needsBulkSave ? "true" : "false"}
               className="border border-emerald-500 bg-emerald-950/40 px-4 py-2 font-semibold text-emerald-200 disabled:opacity-40"
             >
               Save &amp; mark reviewed
