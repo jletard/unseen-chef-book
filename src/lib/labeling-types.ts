@@ -26,18 +26,10 @@ export type LabelIngredient = {
 export type RecipeLabel = {
   recipeId: string;
   name: string;
+  recipeCategory: string;
   defaultSides?: string[];
   variableSides?: string[];
-  selectableSides?: Array<{
-    label: string;
-    options: Array<{
-      recipeId: string;
-      name: string;
-      ingredientStatement: string;
-      allergens: string[];
-      incompleteIngredients: string[];
-    }>;
-  }>;
+  sideSelections?: Array<{ label: string; recipeId?: string; variable?: boolean }>;
   ingredientStatement: string;
   allergens: string[];
   incompleteIngredients: string[];
