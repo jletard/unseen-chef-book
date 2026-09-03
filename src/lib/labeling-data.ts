@@ -18,7 +18,7 @@ export async function getLabelingWorkspace(): Promise<{
   recipes: RecipeLabel[];
 }> {
   const [ingredientResult, recipeResult, versionResult, itemResult] = await Promise.all([
-    supabaseAdmin.from("ingredients").select("id, name, label_name, ingredient_statement, allergen_keys, allergen_details, label_review_status").is("retired_at", null).order("name"),
+    supabaseAdmin.from("ingredients").select("id, name, label_name, ingredient_statement, allergen_keys, allergen_details, dietary_flags, label_review_status").is("retired_at", null).order("name"),
     supabaseAdmin.from("recipes").select("id, name, current_approved_version_id").is("retired_at", null).not("current_approved_version_id", "is", null).order("name"),
     supabaseAdmin.from("recipe_versions").select("id, recipe_id").eq("state", "approved"),
     supabaseAdmin.from("recipe_version_items").select("recipe_version_id, item_kind, ingredient_id, dependency_recipe_version_id, sort_order").order("sort_order"),
@@ -34,6 +34,7 @@ export async function getLabelingWorkspace(): Promise<{
     ingredientStatement: String(row.ingredient_statement || row.label_name || row.name),
     allergenKeys: (row.allergen_keys ?? []) as AllergenKey[],
     allergenDetails: (row.allergen_details ?? {}) as Partial<Record<AllergenKey, string>>,
+    dietaryFlags: (row.dietary_flags ?? []) as Array<"vegetarian">,
     reviewStatus: row.label_review_status === "confirmed" ? "confirmed" : "unreviewed",
   }));
 
