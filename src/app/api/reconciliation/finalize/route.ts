@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeCookbookName } from "@/lib/cookbook-v2/normalize-name";
 
 type DraftRow = {
@@ -15,16 +16,16 @@ function recipeItems(draft: DraftRow) {
     : [];
 }
 
-async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function loadFinalizationPreview() {
   const [draftResult, ingredientResult, aliasResult, recipeResult] = await Promise.all([
-    supabase
+    supabaseAdmin
       .from("recipe_drafts")
       .select("id, draft_payload, generation_metadata")
       .eq("draft_state", "ready_for_review")
       .eq("review_bucket", "ready"),
-    supabase.from("ingredients").select("id, normalized_name").is("retired_at", null),
-    supabase.from("ingredient_aliases").select("ingredient_id, normalized_alias"),
-    supabase
+    supabaseAdmin.from("ingredients").select("id, normalized_name").is("retired_at", null),
+    supabaseAdmin.from("ingredient_aliases").select("ingredient_id, normalized_alias"),
+    supabaseAdmin
       .from("recipes")
       .select("id, name, normalized_name, current_approved_version_id")
       .is("retired_at", null),
@@ -46,10 +47,14 @@ async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof creat
     ingredientMatches.set(row.normalized_alias, matches);
   }
   const approvedRecipes = new Map<string, number>();
+  const approvedRecipeVersions = new Set<string>();
+  const approvedRecipeOptions: Array<{ id: string; name: string; versionId: string }> = [];
   for (const row of recipeResult.data ?? []) {
     if (!row.current_approved_version_id) continue;
     const normalizedName = normalizeCookbookName(row.name);
     approvedRecipes.set(normalizedName, (approvedRecipes.get(normalizedName) ?? 0) + 1);
+    approvedRecipeVersions.add(row.current_approved_version_id);
+    approvedRecipeOptions.push({ id: row.id, name: row.name, versionId: row.current_approved_version_id });
   }
   const readyRecipes = new Map<string, number>();
   for (const draft of drafts) {
@@ -71,6 +76,8 @@ async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof creat
         if (!matches?.size) newIngredients.add(proposedName);
         if ((matches?.size ?? 0) > 1) ambiguousIngredients.add(proposedName);
       } else if (item.kind === "recipe") {
+        const recipeVersionId = typeof item.recipeVersionId === "string" ? item.recipeVersionId : "";
+        if (recipeVersionId && approvedRecipeVersions.has(recipeVersionId)) continue;
         const nestedDraftId = typeof item.nestedDraftId === "string" ? item.nestedDraftId : "";
         if (nestedDraftId) continue;
         const approvedCount = approvedRecipes.get(normalizeCookbookName(proposedName)) ?? 0;
@@ -91,6 +98,7 @@ async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof creat
       ambiguousIngredients: Array.from(ambiguousIngredients).sort(),
       ambiguousComponents: Array.from(ambiguousComponents).sort(),
       dependencyBlockers: Array.from(dependencyBlockers).sort(),
+      approvedRecipeOptions: approvedRecipeOptions.sort((left, right) => left.name.localeCompare(right.name)),
     },
   };
 }
@@ -143,7 +151,7 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   try {
-    const { preview } = await loadFinalizationPreview(supabase);
+    const { preview } = await loadFinalizationPreview();
     return NextResponse.json(preview);
   } catch (error) {
     return NextResponse.json(
@@ -158,7 +166,7 @@ export async function POST() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   try {
-    const { drafts, preview } = await loadFinalizationPreview(supabase);
+    const { drafts, preview } = await loadFinalizationPreview();
     if (preview.ambiguousIngredients.length || preview.ambiguousComponents.length || preview.dependencyBlockers.length) {
       return NextResponse.json(
         { error: "Resolve ambiguous ingredients and component blockers before finalizing.", preview },
@@ -175,6 +183,70 @@ export async function POST() {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Ready drafts could not be finalized." },
+      { status: 400 },
+    );
+  }
+}
+
+export async function PATCH(request: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+
+  try {
+    const body = await request.json() as { missingName?: string; recipeId?: string };
+    const missingName = body.missingName?.trim() ?? "";
+    if (!missingName || !body.recipeId) {
+      return NextResponse.json({ error: "Choose a component match." }, { status: 400 });
+    }
+    const { data: recipe, error: recipeError } = await supabaseAdmin
+      .from("recipes")
+      .select("id, name, current_approved_version_id")
+      .eq("id", body.recipeId)
+      .is("retired_at", null)
+      .not("current_approved_version_id", "is", null)
+      .single();
+    if (recipeError || !recipe?.current_approved_version_id) {
+      throw new Error("The selected recipe does not have an approved version.");
+    }
+
+    const { data: rows, error: rowsError } = await supabaseAdmin
+      .from("recipe_drafts")
+      .select("id, draft_payload")
+      .eq("draft_state", "ready_for_review")
+      .eq("review_bucket", "ready");
+    if (rowsError) throw new Error(rowsError.message);
+    const normalizedMissingName = normalizeCookbookName(missingName);
+    const updates = (rows ?? []).flatMap((row) => {
+      const payload = row.draft_payload as Record<string, unknown>;
+      const items = Array.isArray(payload.items) ? payload.items as Array<Record<string, unknown>> : [];
+      let changed = false;
+      const nextItems = items.map((item) => {
+        if (item.kind !== "recipe" || normalizeCookbookName(String(item.proposedName ?? "")) !== normalizedMissingName) {
+          return item;
+        }
+        changed = true;
+        return {
+          ...item,
+          proposedName: recipe.name,
+          recipeId: recipe.id,
+          recipeVersionId: recipe.current_approved_version_id,
+        };
+      });
+      return changed ? [{ id: row.id, draftPayload: { ...payload, items: nextItems } }] : [];
+    });
+    if (!updates.length) throw new Error(`No Ready draft references “${missingName}”.`);
+    for (const update of updates) {
+      const { error } = await supabase
+        .from("recipe_drafts")
+        .update({ draft_payload: update.draftPayload, updated_by: user.id, updated_at: new Date().toISOString() })
+        .eq("id", update.id);
+      if (error) throw new Error(error.message);
+    }
+    return NextResponse.json({ matchedDraftCount: updates.length, recipeName: recipe.name });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Component match could not be saved." },
       { status: 400 },
     );
   }
