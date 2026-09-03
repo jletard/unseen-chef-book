@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
+import { normalizeCookbookName } from "@/lib/cookbook-v2/normalize-name";
 
 type DraftRow = {
   id: string;
   draft_payload: Record<string, unknown>;
   generation_metadata: Record<string, unknown> | null;
 };
-
-function normalize(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
-}
 
 function recipeItems(draft: DraftRow) {
   return Array.isArray(draft.draft_payload.items)
@@ -29,7 +26,7 @@ async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof creat
     supabase.from("ingredient_aliases").select("ingredient_id, normalized_alias"),
     supabase
       .from("recipes")
-      .select("id, normalized_name, current_approved_version_id")
+      .select("id, name, normalized_name, current_approved_version_id")
       .is("retired_at", null),
   ]);
   const error = draftResult.error ?? ingredientResult.error ?? aliasResult.error ?? recipeResult.error;
@@ -50,12 +47,13 @@ async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof creat
   }
   const approvedRecipes = new Map<string, number>();
   for (const row of recipeResult.data ?? []) {
-    if (!row.normalized_name || !row.current_approved_version_id) continue;
-    approvedRecipes.set(row.normalized_name, (approvedRecipes.get(row.normalized_name) ?? 0) + 1);
+    if (!row.current_approved_version_id) continue;
+    const normalizedName = normalizeCookbookName(row.name);
+    approvedRecipes.set(normalizedName, (approvedRecipes.get(normalizedName) ?? 0) + 1);
   }
   const readyRecipes = new Map<string, number>();
   for (const draft of drafts) {
-    const name = typeof draft.draft_payload.name === "string" ? normalize(draft.draft_payload.name) : "";
+    const name = typeof draft.draft_payload.name === "string" ? normalizeCookbookName(draft.draft_payload.name) : "";
     if (!name) continue;
     readyRecipes.set(name, (readyRecipes.get(name) ?? 0) + 1);
   }
@@ -63,20 +61,24 @@ async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof creat
   const newIngredients = new Set<string>();
   const ambiguousIngredients = new Set<string>();
   const dependencyBlockers = new Set<string>();
+  const ambiguousComponents = new Set<string>();
   for (const draft of drafts) {
     for (const item of recipeItems(draft)) {
       const proposedName = typeof item.proposedName === "string" ? item.proposedName.trim() : "";
       if (!proposedName) continue;
       if (item.kind === "ingredient") {
-        const matches = ingredientMatches.get(normalize(proposedName));
+        const matches = ingredientMatches.get(normalizeCookbookName(proposedName));
         if (!matches?.size) newIngredients.add(proposedName);
         if ((matches?.size ?? 0) > 1) ambiguousIngredients.add(proposedName);
       } else if (item.kind === "recipe") {
         const nestedDraftId = typeof item.nestedDraftId === "string" ? item.nestedDraftId : "";
         if (nestedDraftId) continue;
-        if (!nestedDraftId && (approvedRecipes.get(normalize(proposedName)) ?? 0) === 1) continue;
-        if (!nestedDraftId && (readyRecipes.get(normalize(proposedName)) ?? 0) === 1) continue;
-        dependencyBlockers.add(proposedName);
+        const approvedCount = approvedRecipes.get(normalizeCookbookName(proposedName)) ?? 0;
+        const readyCount = readyRecipes.get(normalizeCookbookName(proposedName)) ?? 0;
+        if (!nestedDraftId && approvedCount === 1) continue;
+        if (!nestedDraftId && approvedCount === 0 && readyCount === 1) continue;
+        if (approvedCount > 1 || readyCount > 1) ambiguousComponents.add(proposedName);
+        else dependencyBlockers.add(proposedName);
       }
     }
   }
@@ -87,6 +89,7 @@ async function loadFinalizationPreview(supabase: Awaited<ReturnType<typeof creat
       readyCount: drafts.length,
       newIngredients: Array.from(newIngredients).sort(),
       ambiguousIngredients: Array.from(ambiguousIngredients).sort(),
+      ambiguousComponents: Array.from(ambiguousComponents).sort(),
       dependencyBlockers: Array.from(dependencyBlockers).sort(),
     },
   };
@@ -96,7 +99,7 @@ function dependencyOrder(drafts: DraftRow[]) {
   const byId = new Map(drafts.map((draft) => [draft.id, draft]));
   const byName = new Map<string, DraftRow[]>();
   for (const draft of drafts) {
-    const name = typeof draft.draft_payload.name === "string" ? normalize(draft.draft_payload.name) : "";
+    const name = typeof draft.draft_payload.name === "string" ? normalizeCookbookName(draft.draft_payload.name) : "";
     if (!name) continue;
     byName.set(name, [...(byName.get(name) ?? []), draft]);
   }
@@ -110,7 +113,7 @@ function dependencyOrder(drafts: DraftRow[]) {
     for (const item of recipeItems(draft)) {
       if (item.kind !== "recipe") continue;
       const nestedDraftId = typeof item.nestedDraftId === "string" ? item.nestedDraftId : "";
-      const proposedName = typeof item.proposedName === "string" ? normalize(item.proposedName) : "";
+      const proposedName = typeof item.proposedName === "string" ? normalizeCookbookName(item.proposedName) : "";
       const namedCandidates = proposedName ? byName.get(proposedName) ?? [] : [];
       const dependency = nestedDraftId
         ? byId.get(nestedDraftId)
@@ -156,7 +159,7 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   try {
     const { drafts, preview } = await loadFinalizationPreview(supabase);
-    if (preview.ambiguousIngredients.length || preview.dependencyBlockers.length) {
+    if (preview.ambiguousIngredients.length || preview.ambiguousComponents.length || preview.dependencyBlockers.length) {
       return NextResponse.json(
         { error: "Resolve ambiguous ingredients and component blockers before finalizing.", preview },
         { status: 409 },
