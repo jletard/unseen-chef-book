@@ -15,11 +15,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     ingredientStatement?: string;
     allergenKeys?: string[];
     allergenDetails?: Record<string, string>;
+    dietaryFlags?: string[];
     confirmed?: boolean;
   };
   const keys = Array.from(new Set(body.allergenKeys ?? []));
+  const dietaryFlags = Array.from(new Set(body.dietaryFlags ?? []));
   if (keys.some((key) => !(key in allergenLabels))) {
     return NextResponse.json({ error: "Unknown allergen." }, { status: 400 });
+  }
+  if (dietaryFlags.some((key) => key !== "vegetarian")) {
+    return NextResponse.json({ error: "Unknown dietary flag." }, { status: 400 });
   }
   const labelName = body.labelName?.trim();
   const ingredientStatement = body.ingredientStatement?.trim();
@@ -38,6 +43,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     ingredient_statement: ingredientStatement,
     allergen_keys: keys as AllergenKey[],
     allergen_details: details,
+    dietary_flags: dietaryFlags,
     label_review_status: body.confirmed ? "confirmed" : "unreviewed",
     label_reviewed_at: body.confirmed ? new Date().toISOString() : null,
   }).eq("id", id);
