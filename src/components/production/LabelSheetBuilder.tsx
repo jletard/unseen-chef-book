@@ -3,6 +3,17 @@
 import { useMemo, useState } from "react";
 import type { RecipeLabel } from "@/lib/labeling-types";
 
+type LabelJob = {
+  id: string;
+  recipeId: string;
+  productName: string;
+  netDeclaration: string;
+  netUnit: string;
+  preparedDate: string;
+  useByDate: string;
+  copies: number;
+};
+
 const businessAddress = "4959 Pan American Freeway NE Suite A, Albuquerque, NM 87109";
 
 function isoDate(date: Date) {
@@ -35,6 +46,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
   const [preparedDate, setPreparedDate] = useState(isoDate(new Date()));
   const [shelfLifeDays, setShelfLifeDays] = useState(7);
   const [copies, setCopies] = useState(6);
+  const [labelJobs, setLabelJobs] = useState<LabelJob[]>([]);
   const [ingredientOrderConfirmed, setIngredientOrderConfirmed] = useState(false);
   const [nutritionExemptionConfirmed, setNutritionExemptionConfirmed] = useState(false);
   const recipe = recipes.find((item) => item.recipeId === recipeId);
@@ -44,7 +56,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     return isoDate(date);
   }, [preparedDate, shelfLifeDays]);
   const netDeclaration = netQuantityDeclaration(netQuantity, netUnit);
-  const printable = Boolean(
+  const currentLabelValid = Boolean(
     recipe &&
     productName.trim() &&
     preparedDate &&
@@ -53,12 +65,30 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     nutritionExemptionConfirmed &&
     recipe.incompleteIngredients.length === 0,
   );
+  const printable = labelJobs.length > 0;
 
   function chooseRecipe(id: string) {
     const selected = recipes.find((item) => item.recipeId === id);
     setRecipeId(id);
     setProductName(selected?.name ?? "");
     setIngredientOrderConfirmed(false);
+  }
+
+  function addToSheet() {
+    if (!recipe || !currentLabelValid) return;
+    setLabelJobs((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        recipeId: recipe.recipeId,
+        productName: productName.trim(),
+        netDeclaration,
+        netUnit,
+        preparedDate,
+        useByDate,
+        copies: Math.max(1, Math.floor(copies)),
+      },
+    ]);
   }
 
   return (
@@ -109,28 +139,54 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
             Cannot print a compliance label yet. Review: {recipe.incompleteIngredients.join(" · ")}
           </div>
         ) : null}
-        <button type="button" disabled={!printable} onClick={() => window.print()} className="mt-4 border border-emerald-600 px-5 py-2 font-semibold text-emerald-300 disabled:opacity-40">Print Avery 6464 sheets</button>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button type="button" disabled={!currentLabelValid} onClick={addToSheet} className="border border-sky-600 px-5 py-2 font-semibold text-sky-300 disabled:opacity-40">Add labels to sheet</button>
+          <button type="button" disabled={!printable} onClick={() => window.print()} className="border border-emerald-600 px-5 py-2 font-semibold text-emerald-300 disabled:opacity-40">Print mixed Avery 6464 sheet</button>
+        </div>
+
+        <div className="mt-4 border border-zinc-800 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-semibold">Labels on this print run</h2>
+            <span className="text-sm text-zinc-400">{labelJobs.reduce((total, job) => total + job.copies, 0)} labels</span>
+          </div>
+          {labelJobs.length === 0 ? (
+            <p className="mt-2 text-sm text-zinc-400">Choose a recipe and quantity, then add it to the sheet. Repeat for each product.</p>
+          ) : (
+            <div className="mt-2 grid gap-2">
+              {labelJobs.map((job) => (
+                <div key={job.id} className="flex items-center justify-between gap-3 border border-zinc-800 px-3 py-2 text-sm">
+                  <span><strong>{job.copies}×</strong> {job.productName} · {job.netDeclaration}</span>
+                  <button type="button" onClick={() => setLabelJobs((current) => current.filter((item) => item.id !== job.id))} className="border border-red-800 px-3 py-1 text-red-300">Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
-      {recipe && (
+      {labelJobs.length > 0 && (
         <div className="label-sheet mt-6">
-          {Array.from({ length: Math.max(copies, 0) }, (_, index) => (
-            <article className="food-label" key={index}>
+          {labelJobs.flatMap((job) => {
+            const jobRecipe = recipes.find((item) => item.recipeId === job.recipeId);
+            if (!jobRecipe) return [];
+            return Array.from({ length: job.copies }, (_, index) => (
+            <article className="food-label" key={`${job.id}-${index}`}>
               <header>
                 <div className="food-label-brand">THE UNSEEN CHEF</div>
-                <h2>{productName || recipe.name}</h2>
+                <h2>{job.productName || jobRecipe.name}</h2>
               </header>
-              <p><strong>Ingredients:</strong> {recipe.ingredientStatement || "Ingredient data incomplete"}</p>
-              {recipe.allergens.length > 0 && <p className="food-label-allergens"><strong>CONTAINS:</strong> {recipe.allergens.join(", ")}</p>}
+              <p><strong>Ingredients:</strong> {jobRecipe.ingredientStatement || "Ingredient data incomplete"}</p>
+              {jobRecipe.allergens.length > 0 && <p className="food-label-allergens"><strong>CONTAINS:</strong> {jobRecipe.allergens.join(", ")}</p>}
               <div className="food-label-dates">
-                <span><strong>Prepared:</strong> {preparedDate}</span>
-                <span><strong>Use by:</strong> {useByDate}</span>
+                <span><strong>Prepared:</strong> {job.preparedDate}</span>
+                <span><strong>Use by:</strong> {job.useByDate}</span>
               </div>
-              <p><strong>{netUnit === "fl oz" ? "Net Contents" : "Net Wt."}</strong> {netDeclaration || "_____"}</p>
+              <p><strong>{job.netUnit === "fl oz" ? "Net Contents" : "Net Wt."}</strong> {job.netDeclaration}</p>
               <p className="food-label-storage">KEEP REFRIGERATED AT 41°F OR BELOW</p>
               <footer>The Unseen Chef · {businessAddress}</footer>
             </article>
-          ))}
+          ));
+          })}
         </div>
       )}
     </div>
