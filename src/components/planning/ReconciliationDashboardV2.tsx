@@ -782,6 +782,16 @@ function DraftReviewCard({
               closeAfterImport
             />
           )}
+          {stage === "ready" && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onMove("major")}
+              className="border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-300 disabled:opacity-40"
+            >
+              Back to edit
+            </button>
+          )}
         </div>
       </div>
 
