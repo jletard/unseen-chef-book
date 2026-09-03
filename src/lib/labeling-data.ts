@@ -14,21 +14,34 @@ type VersionItem = {
   sort_order: number;
 };
 
+const allergenSourceTerms: Partial<Record<AllergenKey, string[]>> = {
+  fish: ["salmon", "tilapia", "cod", "trout", "tuna", "halibut", "haddock", "pollock", "anchovy", "sardine"],
+  crustacean_shellfish: ["shrimp", "crab", "lobster", "crayfish"],
+  tree_nuts: ["almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia", "brazil nut"],
+};
+
+function inferAllergenSource(ingredientName: string, key: AllergenKey) {
+  const normalized = normalizeCookbookName(ingredientName);
+  const match = allergenSourceTerms[key]?.find((term) => normalized.includes(term));
+  return match ? match.replace(/\b\w/gu, (letter) => letter.toUpperCase()) : "";
+}
+
 export async function getLabelingWorkspace(): Promise<{
   ingredients: LabelIngredient[];
   recipes: RecipeLabel[];
 }> {
-  const [ingredientResult, recipeResult, versionResult, itemResult, menuResult, sourceResult, linkResult] = await Promise.all([
+  const [ingredientResult, recipeResult, versionResult, itemResult, menuResult, sourceResult, linkResult, legacyLinkResult] = await Promise.all([
     supabaseAdmin.from("ingredients").select("id, name, label_name, ingredient_statement, allergen_keys, allergen_details, dietary_flags, label_review_status").is("retired_at", null).order("name"),
     supabaseAdmin.from("recipes").select("id, name, current_approved_version_id").is("retired_at", null).not("current_approved_version_id", "is", null).order("name"),
     supabaseAdmin.from("recipe_versions").select("id, recipe_id").eq("state", "approved"),
     supabaseAdmin.from("recipe_version_items").select("recipe_version_id, item_kind, ingredient_id, dependency_recipe_version_id, sort_order").order("sort_order"),
-    supabaseAdmin.from("menu_items_v2").select("id, name, sides").or("active.is.null,active.eq.true").order("name"),
-    supabaseAdmin.from("production_item_sources").select("production_item_id, source_id").eq("source_type", "menu_item").eq("mapping_state", "confirmed").not("source_id", "is", null),
+    supabaseAdmin.from("menu_items_v2").select("id, name, short_name, sides").or("active.is.null,active.eq.true").order("name"),
+    supabaseAdmin.from("production_item_sources").select("production_item_id, source_type, source_id, normalized_source_name").eq("mapping_state", "confirmed"),
     supabaseAdmin.from("production_item_recipe_links").select("production_item_id, recipe_id").eq("role", "main").eq("active", true),
+    supabaseAdmin.from("menu_item_recipe_links").select("menu_item_id, recipe_id, role").eq("active", true),
   ]);
 
-  const error = ingredientResult.error ?? recipeResult.error ?? versionResult.error ?? itemResult.error ?? menuResult.error ?? sourceResult.error ?? linkResult.error;
+  const error = ingredientResult.error ?? recipeResult.error ?? versionResult.error ?? itemResult.error ?? menuResult.error ?? sourceResult.error ?? linkResult.error ?? legacyLinkResult.error;
   if (error) throw new Error(`Unable to load labeling workspace: ${error.message}`);
 
   const ingredients: LabelIngredient[] = (ingredientResult.data ?? []).map((row) => ({
@@ -73,7 +86,7 @@ export async function getLabelingWorkspace(): Promise<{
         statements.push(ingredient.ingredientStatement);
         if (ingredient.reviewStatus !== "confirmed") incomplete.add(ingredient.name);
         for (const key of ingredient.allergenKeys) {
-          const detail = ingredient.allergenDetails[key]?.trim();
+          const detail = ingredient.allergenDetails[key]?.trim() || inferAllergenSource(ingredient.name, key);
           allergens.add(detail ? `${allergenLabels[key]} (${detail})` : allergenLabels[key]);
           if (["fish", "crustacean_shellfish", "tree_nuts"].includes(key) && !detail) {
             incomplete.add(`${ingredient.name}: specify allergen source`);
@@ -105,19 +118,31 @@ export async function getLabelingWorkspace(): Promise<{
   const recipeLabelById = new Map(recipes.map((item) => [item.recipeId, item]));
   const recipeLabelByName = new Map(recipes.map((item) => [normalizeCookbookName(item.name), item]));
   const productionItemByMenuId = new Map(
-    (sourceResult.data ?? []).map((row) => [String(row.source_id), String(row.production_item_id)]),
+    (sourceResult.data ?? [])
+      .filter((row) => row.source_type === "menu_item" && row.source_id)
+      .map((row) => [String(row.source_id), String(row.production_item_id)]),
+  );
+  const productionItemBySourceName = new Map(
+    (sourceResult.data ?? []).map((row) => [String(row.normalized_source_name), String(row.production_item_id)]),
   );
   const recipeIdByProductionItem = new Map(
     (linkResult.data ?? []).map((row) => [String(row.production_item_id), String(row.recipe_id)]),
+  );
+  const legacyRecipeIdByMenuId = new Map(
+    (legacyLinkResult.data ?? [])
+      .filter((row) => row.role === "main")
+      .map((row) => [String(row.menu_item_id), String(row.recipe_id)]),
   );
   const menuLabels: RecipeLabel[] = [];
   const menuLinkedRecipeIds = new Set<string>();
 
   for (const menu of menuResult.data ?? []) {
     const productionItemId = productionItemByMenuId.get(String(menu.id));
-    const linkedRecipeId = productionItemId ? recipeIdByProductionItem.get(productionItemId) : undefined;
+    const linkedRecipeId = (productionItemId ? recipeIdByProductionItem.get(productionItemId) : undefined)
+      ?? legacyRecipeIdByMenuId.get(String(menu.id));
     const mainRecipe = (linkedRecipeId ? recipeLabelById.get(linkedRecipeId) : undefined)
-      ?? recipeLabelByName.get(normalizeCookbookName(String(menu.name)));
+      ?? recipeLabelByName.get(normalizeCookbookName(String(menu.name)))
+      ?? (menu.short_name ? recipeLabelByName.get(normalizeCookbookName(String(menu.short_name))) : undefined);
     if (!mainRecipe) continue;
 
     if (linkedRecipeId) menuLinkedRecipeIds.add(linkedRecipeId);
@@ -127,7 +152,11 @@ export async function getLabelingWorkspace(): Promise<{
     const incomplete = new Set(mainRecipe.incompleteIngredients);
 
     for (const sideName of defaultSides) {
-      const side = recipeLabelByName.get(normalizeCookbookName(sideName));
+      const normalizedSideName = normalizeCookbookName(sideName);
+      const sideProductionItemId = productionItemBySourceName.get(normalizedSideName);
+      const sideRecipeId = sideProductionItemId ? recipeIdByProductionItem.get(sideProductionItemId) : undefined;
+      const side = (sideRecipeId ? recipeLabelById.get(sideRecipeId) : undefined)
+        ?? recipeLabelByName.get(normalizedSideName);
       if (!side) {
         incomplete.add(`Missing approved default side: ${sideName}`);
         continue;

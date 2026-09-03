@@ -188,7 +188,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
                 <span><strong>Use by:</strong> {job.useByDate}</span>
               </div>
               <p><strong>{job.netUnit === "fl oz" ? "Net Contents" : "Net Wt."}</strong> {job.netDeclaration}</p>
-              <p className="food-label-storage">KEEP REFRIGERATED AT 41°F OR BELOW</p>
+              <p className="food-label-storage">KEEP REFRIGERATED AT 40°F OR BELOW</p>
               <footer>The Unseen Chef · {businessAddress}</footer>
             </article>
           ));
