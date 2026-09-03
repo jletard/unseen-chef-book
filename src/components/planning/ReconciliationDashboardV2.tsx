@@ -13,6 +13,7 @@ import {
   createSingleRecipeDraftSchema,
   packetCurrentValues,
   SECRET_AI_PACKET_SIZE,
+  type SecretAIMajorRevision,
   type SecretAIRecipeRequest,
   type SecretAIRecipeResult,
 } from "@/lib/cookbook-v2/secret-ai-batch";
@@ -595,6 +596,67 @@ function FastReviewWorkspace({
     }
   }
 
+  async function importMajorRevision(
+    draft: ReconciliationDraftRow,
+    values: Record<string, unknown>,
+  ) {
+    setBusyDraftId(draft.id);
+    try {
+      const revision = values as SecretAIMajorRevision;
+      const response = await fetch(`/api/reconciliation/drafts/${draft.id}/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(revision),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        draftPayload?: Record<string, unknown>;
+        components?: Array<{ id: string; draftPayload: Record<string, unknown> }>;
+      };
+      if (!response.ok || !result.draftPayload) {
+        throw new Error(result.error ?? "Major revision could not be imported.");
+      }
+      setDrafts((existing) => {
+        const updated = existing.map((item) =>
+          item.id === draft.id
+            ? {
+                ...item,
+                draftPayload: result.draftPayload!,
+                name: String(result.draftPayload!.name ?? item.name),
+                itemCount: Array.isArray(result.draftPayload!.items) ? result.draftPayload!.items.length : 0,
+                stepCount: Array.isArray(result.draftPayload!.steps) ? result.draftPayload!.steps.length : 0,
+              }
+            : item,
+        );
+        for (const component of result.components ?? []) {
+          if (updated.some((item) => item.id === component.id)) continue;
+          updated.push({
+            id: component.id,
+            draftState: "ready_for_review",
+            reviewBucket: "unreviewed",
+            name: String(component.draftPayload.name ?? "Unnamed component"),
+            recipeCategory: String(component.draftPayload.recipeCategory ?? "component"),
+            itemCount: Array.isArray(component.draftPayload.items) ? component.draftPayload.items.length : 0,
+            stepCount: Array.isArray(component.draftPayload.steps) ? component.draftPayload.steps.length : 0,
+            inlineComponent: true,
+            bulkProtein: false,
+            draftPayload: component.draftPayload,
+          });
+        }
+        return updated;
+      });
+      setMessage(
+        `Imported the revised “${draft.name}” recipe and ${(result.components ?? []).length} inline component ` +
+          `${(result.components ?? []).length === 1 ? "draft" : "drafts"}.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Major revision could not be imported.");
+      throw error;
+    } finally {
+      setBusyDraftId(null);
+    }
+  }
+
   const tabs: Array<{ bucket: ReviewStage; label: string }> = [
     { bucket: "unreviewed", label: "Keep / Edit" },
     { bucket: "needs_classification", label: "Classify edits" },
@@ -707,6 +769,7 @@ function FastReviewWorkspace({
           stage={stage}
           onMove={(bucket) => moveDraft(current, bucket)}
           onSave={(payload, markReady) => saveDraft(current, payload, markReady)}
+          onMajorImport={(values) => importMajorRevision(current, values)}
           onPrevious={() => setReviewOffset((offset) => offset <= 0 ? Math.max(stageDrafts.length - 1, 0) : offset - 1)}
           onNext={() => setReviewOffset((offset) => stageDrafts.length ? (offset + 1) % stageDrafts.length : 0)}
         />
@@ -723,6 +786,7 @@ function DraftReviewCard({
   stage,
   onMove,
   onSave,
+  onMajorImport,
   onPrevious,
   onNext,
 }: {
@@ -733,6 +797,7 @@ function DraftReviewCard({
   stage: ReviewStage;
   onMove: (bucket: ReviewStage) => void;
   onSave: (payload: Record<string, unknown>, markReady: boolean) => Promise<void>;
+  onMajorImport: (values: Record<string, unknown>) => Promise<void>;
   onPrevious: () => void;
   onNext: () => void;
 }) {
@@ -776,8 +841,8 @@ function DraftReviewCard({
           {stage === "major" && (
             <SecretAIImportBox
               formSchema={createSingleRecipeDraftSchema(draft.name)}
-              currentValues={draft.draftPayload}
-              onImport={(values) => onSave(ensureDraftIds(values), false)}
+              currentValues={{ draft: draft.draftPayload, inlineComponents: [] }}
+              onImport={onMajorImport}
               successMessage="Major AI revision imported. Review it, then save and advance."
               closeAfterImport
             />
@@ -815,27 +880,15 @@ function DraftReviewCard({
         </div>
       </div>
       {(stage === "minor" || stage === "major" || stage === "ready") && (
-        <DraftQuickEditor key={draft.id} draft={draft} busy={busy} onSave={onSave} />
+        <DraftQuickEditor
+          key={`${draft.id}:${JSON.stringify(draft.draftPayload)}`}
+          draft={draft}
+          busy={busy}
+          onSave={onSave}
+        />
       )}
     </article>
   );
-}
-
-function ensureDraftIds(payload: Record<string, unknown>) {
-  const withIds = (value: unknown) =>
-    Array.isArray(value)
-      ? value.map((entry) => {
-          if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
-          const item = entry as Record<string, unknown>;
-          return { ...item, id: typeof item.id === "string" && item.id ? item.id : crypto.randomUUID() };
-        })
-      : [];
-  return {
-    ...payload,
-    equipment: withIds(payload.equipment),
-    items: withIds(payload.items),
-    steps: withIds(payload.steps),
-  };
 }
 
 function DraftQuickEditor({

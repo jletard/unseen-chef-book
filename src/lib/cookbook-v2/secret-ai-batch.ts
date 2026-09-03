@@ -90,6 +90,11 @@ export type SecretAIRecipeResult = {
   inlineComponents?: SecretAIRecipeResult["draft"][];
 };
 
+export type SecretAIMajorRevision = {
+  draft: SecretAIRecipeResult["draft"];
+  inlineComponents?: SecretAIRecipeResult["draft"][];
+};
+
 export function createRecipePacketSchema(jobIds: string[]): SecretAIFormSchema {
   return {
     name: "Cookbook recipe intake packet",
@@ -121,8 +126,11 @@ export function createSingleRecipeDraftSchema(recipeName: string): SecretAIFormS
   return {
     name: `Major recipe revision: ${recipeName}`,
     description:
-      "Discuss the recipe with the chef and make the requested substantive corrections. Return the complete corrected recipe draft, not a patch. Preserve app-owned id fields when they are present. Purchased proteins should use lb or oz; dry ingredients and seasonings should use metric weight; cups, quarts, and fluid ounces are liquid-only. Keep distinct ingredient identities distinct. A prepared sauce, marinade, side, or other reusable preparation must be represented as a recipe item rather than flattened into purchased ingredients.",
-    fields: recipeFields,
+      "Discuss the recipe with the chef and make the requested substantive corrections. Return the complete corrected parent draft, not a patch. Preserve app-owned id fields when they are present. Purchased proteins should use lb or oz; dry ingredients and seasonings should use metric weight; cups, quarts, and fluid ounces are liquid-only. Keep distinct ingredient identities distinct. Reference prepared sauces, marinades, sides, and other reusable preparations as recipe items. Put every referenced reusable preparation that does not already exist in inlineComponents as its own complete recipe.",
+    fields: {
+      draft: { type: "object", fields: recipeFields, required: true },
+      inlineComponents: { type: "array", items: inlineComponent },
+    },
   };
 }
 
