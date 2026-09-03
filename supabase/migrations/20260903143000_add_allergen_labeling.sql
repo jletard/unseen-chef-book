@@ -5,6 +5,7 @@ alter table public.ingredients
   add column if not exists ingredient_statement text,
   add column if not exists allergen_keys text[] not null default '{}'::text[],
   add column if not exists allergen_details jsonb not null default '{}'::jsonb,
+  add column if not exists dietary_flags text[] not null default '{}'::text[],
   add column if not exists label_review_status text not null default 'unreviewed',
   add column if not exists label_reviewed_at timestamptz;
 
@@ -30,6 +31,15 @@ begin
         'peanuts', 'wheat', 'soy', 'sesame'
       ]::text[]) not valid;
   end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.ingredients'::regclass
+      and conname = 'ingredients_dietary_flags_check'
+  ) then
+    alter table public.ingredients add constraint ingredients_dietary_flags_check
+      check (dietary_flags <@ array['vegetarian']::text[]) not valid;
+  end if;
 end $$;
 
 update public.ingredients
@@ -41,4 +51,3 @@ comment on column public.ingredients.ingredient_statement is
   'Consumer-facing ingredient declaration. Compound purchased foods include their subingredients here.';
 comment on column public.ingredients.allergen_details is
   'Specific sources required for fish, crustacean shellfish, and tree nuts, keyed by allergen key.';
-
