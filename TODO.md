@@ -1,139 +1,52 @@
 # TODO
 
-## Phase 1 — Foundation
+This file tracks work that is still meaningfully unfinished. Completed foundation work is documented in `README.md` and `DESIGN.md` rather than kept as a giant historical checklist.
 
-- [x] Create Next.js project
-- [x] Create README.md
-- [x] Create DESIGN.md
-- [x] Create GitHub repository
-- [x] Connect local project to GitHub
-- [x] Install Supabase client
-- [x] Connect to the existing Supabase project
-- [x] Add authentication
-- [x] Create dark-mode-only application shell
-- [x] Add base responsive layout
-- [x] Add base print stylesheet
-- [x] Confirm the app can read existing `menu_items_v2`
+## Working now
 
-## Phase 1.5 — Application Navigation
+- [x] Next.js/React/TypeScript application shell
+- [x] Shared Supabase connection
+- [x] Authentication
+- [x] Dark-mode-only responsive navigation
+- [x] Persistent production-week selection
+- [x] Menu item, main dish, side, component, ingredient, allergen, category, and protein-type planning views
+- [x] Recipe storage, recipe items/components, recipe steps, yields, and recipe editing
+- [x] Menu-item-to-recipe relationships
+- [x] Reconciliation workflow and review queues
+- [x] Data-repair tooling
+- [x] Production list
+- [x] Shopping list
+- [x] Prep list
+- [x] Cook / This Week view
+- [x] Recipe search
+- [x] Avery 6464 retail/grab-and-go label builder
+- [x] Ingredient/allergen label data
+- [x] Variable/selected side support for labels
+- [x] Six-label letter-size printing without trailing blank pages
 
-- [x] Add top-level tabs
-- [x] Decide final tab names and order
-- [x] Highlight the active tab
-- [x] Keep the selected production week across pages
-- [x] Make the header work cleanly on mobile
-- [x] Create placeholder pages for each top-level area
-- [ ] Confirm the shell prints without header, footer, or navigation
+## Continue improving
 
-### Navigation Structure
+- [ ] Continue recipe cleanup and approval until legacy/imported cookbook data is fully reconciled
+- [ ] Resolve remaining duplicate, incomplete, or ambiguous culinary records through Reconciliation/Data Repair
+- [ ] Keep menu-item-to-recipe relationships complete as menus change
+- [ ] Continue validating recipe yields, component relationships, and production scaling against real kitchen use
+- [ ] Continue improving shopping/prep/production output where actual production exposes friction
+- [ ] Continue validating retail label output and label data against operational/regulatory needs
+- [ ] Confirm all general-purpose print views remain compact and do not leak application navigation or controls
+- [ ] Improve mobile workflows when actual phone use exposes a problem
 
-- Planning
-  - Menu Items
-  - Recipes
-  - Components
-  - Ingredients
-- Production
-  - Shopping List
-  - Prep List
-  - Production List
-- Cook
-  - This Week
-  - Recipe Search
+## Later, when useful
 
-## Phase 2 — Core Data
-
-- [ ] Create `ingredients` table
-- [ ] Create `recipes` table
-- [ ] Create `recipe_ingredients` table
-- [ ] Create menu item to recipe relationship
-- [ ] Support component recipes
-- [ ] Define TypeScript types for cookbook data
-- [ ] Create typed database query helpers
-- [ ] Add database access rules
-
-## Phase 3 — Ingredients
-
-- [ ] Ingredient list
-- [ ] Ingredient search
-- [ ] Create ingredient
-- [ ] Edit ingredient
-- [ ] Archive ingredient
-- [ ] Ingredient categories
-- [ ] Standard units
-
-## Phase 4 — Recipes
-
-- [ ] Recipe list
-- [ ] Recipe search
-- [ ] Create recipe
-- [ ] Edit recipe
-- [ ] Archive recipe
-- [ ] Recipe yield
-- [ ] Recipe ingredient rows
-- [ ] Recipe instructions
-- [ ] Recipe notes
-- [ ] Link recipe to existing menu items
-- [ ] Mobile recipe editing
-- [ ] Desktop-optimized recipe editing
-
-## Phase 5 — Scaling
-
-- [ ] Scale recipes by yield
-- [ ] Scale recipes by portion count
-- [ ] Scale component recipes
-- [ ] Display useful converted quantities
-- [ ] Preserve original recipe quantities
-- [ ] Print scaled recipes cleanly
-
-## Phase 6 — Production Week
-
-- [x] Select production week
-- [ ] Read food totals from existing order data
-- [ ] Exclude customer names and customer information
-- [ ] Match production items to recipes
-- [ ] Show items without linked recipes
-- [ ] Open the correctly scaled recipe from production totals
-
-## Phase 7 — Shopping Lists
-
-- [ ] Generate shopping list from production totals
-- [ ] Combine matching ingredients
-- [ ] Group ingredients by category
-- [ ] Handle different units
-- [ ] Allow manual adjustments
-- [ ] Allow manual additions
-- [ ] Print a compact shopping list
-- [ ] Make shopping lists easy to use on a phone
-
-## Phase 8 — Prep and Production Documents
-
-- [ ] Generate recipe sheets
-- [ ] Generate prep sheets
-- [ ] Generate production sheets
-- [ ] Create compact black-and-white print layouts
-- [ ] Remove navigation and controls from print
-- [ ] Avoid unnecessary spacing
-- [ ] Avoid decorative graphics and emojis
-- [ ] Handle page breaks cleanly
-
-## Phase 9 — Access
-
-- [ ] Owner access
-- [ ] Read-only cook access
-- [ ] Recipe editor access
-- [ ] Hide costs and administrative information from cooks
-- [ ] Add and remove users safely
-
-## Later
-
-- [ ] Recipe version history
-- [ ] Ingredient costing
-- [ ] Recipe costing
+- [ ] Recipe version-history UI beyond the current approved/draft workflow
+- [ ] Ingredient and recipe costing
 - [ ] Purchase units and package sizes
-- [ ] Vendor information
-- [ ] Yield tracking
-- [ ] Allergen information
+- [ ] Vendor purchasing information
 - [ ] Nutrition information
 - [ ] Inventory
 - [ ] Production completion tracking
-- [ ] Implement Sign Out if multiple users or shared devices make it necessary
+- [ ] Additional user roles/read-only cook access if multiple users make it necessary
+- [ ] Sign Out UI if shared devices or multiple users make it necessary
+
+## Rule
+
+Do not build a feature because an old roadmap says it should exist. Build it when it solves a current kitchen problem.
