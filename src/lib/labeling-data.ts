@@ -174,8 +174,7 @@ export async function getLabelingWorkspace(): Promise<{
         ?? recipeLabelByName.get(normalizedSideName);
       if (!side) {
         if (normalizedSideName === "seasonal vegetables") {
-          variableSides.push(sideName);
-          sideSelections.push({ label: sideName, variable: true });
+          sideSelections.push({ label: sideName });
           continue;
         }
         sideSelections.push({ label: sideName });

@@ -199,6 +199,10 @@ svg {
     padding: 0 !important;
   }
 
+  body:has(.label-sheet) main > div:has(> .label-sheet) {
+    margin: 0 !important;
+  }
+
   .label-sheet {
     display: block;
     width: auto;
