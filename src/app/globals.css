@@ -107,6 +107,14 @@ svg {
     min-height: auto;
   }
 
+  body:has(.label-sheet) {
+    page: labels;
+  }
+
+  body:has(.label-sheet) .min-h-screen {
+    min-height: 0 !important;
+  }
+
   nav,
   button,
   [data-print-hidden="true"],
@@ -199,7 +207,6 @@ svg {
 
   .label-page {
     display: grid;
-    page: labels;
     width: 8.5in;
     height: 11in;
     grid-template-columns: repeat(2, 4in);
