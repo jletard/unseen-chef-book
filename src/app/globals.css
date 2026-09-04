@@ -192,13 +192,26 @@ svg {
   }
 
   .label-sheet {
+    display: block;
+    width: auto;
+    margin: 0 !important;
+  }
+
+  .label-page {
     display: grid;
     page: labels;
     width: 8.1875in;
+    height: 10in;
     grid-template-columns: repeat(2, 4in);
-    grid-auto-rows: 3.3333in;
+    grid-template-rows: repeat(3, 3.3333in);
     column-gap: 0.1875in;
     margin: 0;
+    break-after: page;
+    break-inside: avoid;
+  }
+
+  .label-page:last-child {
+    break-after: auto;
   }
 
   @page labels {
