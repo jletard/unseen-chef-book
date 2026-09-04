@@ -22,7 +22,8 @@ export async function POST(
     unit?: string;
     preparationNote?: string;
   };
-  const quantity = Number(body.quantity);
+  let quantity = Number(body.quantity);
+  let unit = body.unit;
 
   if (
     !body.sourceId ||
@@ -30,10 +31,19 @@ export async function POST(
     !["ingredient", "component"].includes(body.itemType) ||
     !Number.isFinite(quantity) ||
     quantity <= 0 ||
-    !body.unit ||
-    !units.has(body.unit)
+    !unit ||
+    !units.has(unit)
   ) {
     return NextResponse.json({ error: "Item, quantity, and unit are required." }, { status: 400 });
+  }
+
+  // The database's legacy solid-volume constraint treats the numeric value as
+  // tablespoons even when the submitted unit is teaspoons. Normalize 2-5 tsp
+  // to the equivalent sub-2-tbsp value before insert. Six tsp is 2 tbsp and
+  // belongs in grams/kg under the cookbook measurement standard.
+  if (unit === "tsp" && quantity >= 2 && quantity < 6) {
+    quantity /= 3;
+    unit = "tbsp";
   }
 
   const { count } = await supabaseAdmin
@@ -49,7 +59,7 @@ export async function POST(
       ingredient_id: body.itemType === "ingredient" ? body.sourceId : null,
       component_recipe_id: body.itemType === "component" ? body.sourceId : null,
       quantity,
-      unit: body.unit,
+      unit,
       preparation_note: body.preparationNote?.trim() || null,
       sort_order: count ?? 0,
     })
