@@ -200,11 +200,12 @@ svg {
   .label-page {
     display: grid;
     page: labels;
-    width: 8.1875in;
-    height: 10in;
+    width: 8.5in;
+    height: 11in;
     grid-template-columns: repeat(2, 4in);
     grid-template-rows: repeat(3, 3.3333in);
     column-gap: 0.1875in;
+    padding: 0.5in 0.15625in;
     margin: 0;
     break-after: page;
     break-inside: avoid;
@@ -216,7 +217,7 @@ svg {
 
   @page labels {
     size: letter portrait;
-    margin: 0.5in 0.15625in;
+    margin: 0;
   }
 
   .food-label {
