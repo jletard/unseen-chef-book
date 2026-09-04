@@ -65,8 +65,6 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
   const [labelJobs, setLabelJobs] = useState<LabelJob[]>([]);
   const [variableSideIngredients, setVariableSideIngredients] = useState<Record<string, string>>({});
   const [selectedSides, setSelectedSides] = useState<SideSelection[]>(() => initialSideSelections(initialRecipe));
-  const [ingredientOrderConfirmed, setIngredientOrderConfirmed] = useState(false);
-  const [nutritionExemptionConfirmed, setNutritionExemptionConfirmed] = useState(false);
   const recipe = recipes.find((item) => item.recipeId === recipeId);
   const productRecipes = browseAllRecipes || topLevelRecipes.length === 0 ? recipes : topLevelRecipes;
   const useByDate = useMemo(() => {
@@ -89,8 +87,6 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     productName.trim() &&
     preparedDate &&
     netDeclaration &&
-    ingredientOrderConfirmed &&
-    nutritionExemptionConfirmed &&
     selectableSidesComplete &&
     selectedSideIncompleteIngredients.length === 0 &&
     recipe.incompleteIngredients.length === 0,
@@ -113,7 +109,6 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     setNetUnit("oz");
     setVariableSideIngredients({});
     setSelectedSides(initialSideSelections(selected));
-    setIngredientOrderConfirmed(false);
   }
 
   function toggleBrowseAll(checked: boolean) {
@@ -148,6 +143,13 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
         allergens: Array.from(selectedAllergens).sort(),
       },
     ]);
+    setRecipeId("");
+    setProductName("");
+    setNetQuantity("14");
+    setNetUnit("oz");
+    setCopies(1);
+    setVariableSideIngredients({});
+    setSelectedSides([]);
   }
 
   return (
@@ -156,6 +158,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="text-sm">Approved recipe
             <select value={recipeId} onChange={(event) => chooseRecipe(event.target.value)} className="mt-1 block w-full border border-zinc-700 bg-black px-3 py-2">
+              <option value="">Choose a product</option>
               {productRecipes.map((item) => <option key={item.recipeId} value={item.recipeId}>{item.name}</option>)}
             </select>
           </label>
@@ -211,15 +214,7 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
           </label>
         </div>
 
-        <div className="mt-4 grid gap-2 border border-zinc-800 p-3 text-sm">
-          <label className="flex items-start gap-2">
-            <input type="checkbox" checked={ingredientOrderConfirmed} onChange={(event) => setIngredientOrderConfirmed(event.target.checked)} className="mt-1 size-4" />
-            <span>I verified that ingredients and component subingredients appear in descending order by weight.</span>
-          </label>
-          <label className="flex items-start gap-2">
-            <input type="checkbox" checked={nutritionExemptionConfirmed} onChange={(event) => setNutritionExemptionConfirmed(event.target.checked)} className="mt-1 size-4" />
-            <span>This food is prepared on-site, sold only by this establishment, and carries no nutrition or health claim; the retail-establishment Nutrition Facts exemption applies.</span>
-          </label>
+        <div className="mt-4 border border-zinc-800 p-3 text-sm">
           {netDeclaration && <div className="text-zinc-400">Printed net quantity: <strong className="text-white">{netDeclaration}</strong></div>}
         </div>
 
