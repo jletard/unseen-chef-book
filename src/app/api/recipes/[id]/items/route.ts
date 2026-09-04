@@ -22,8 +22,8 @@ export async function POST(
     unit?: string;
     preparationNote?: string;
   };
-  let quantity = Number(body.quantity);
-  let unit = body.unit;
+  const quantity = Number(body.quantity);
+  const unit = body.unit;
 
   if (
     !body.sourceId ||
@@ -37,13 +37,30 @@ export async function POST(
     return NextResponse.json({ error: "Item, quantity, and unit are required." }, { status: 400 });
   }
 
-  // The database's legacy solid-volume constraint treats the numeric value as
-  // tablespoons even when the submitted unit is teaspoons. Normalize 2-5 tsp
-  // to the equivalent sub-2-tbsp value before insert. Six tsp is 2 tbsp and
-  // belongs in grams/kg under the cookbook measurement standard.
-  if (unit === "tsp" && quantity >= 2 && quantity < 6) {
-    quantity /= 3;
-    unit = "tbsp";
+  // Enforce the cookbook measurement rule against the source's actual kind.
+  // Solid ingredients may use tsp/tbsp below 2 tbsp; 2 tbsp or more must use g/kg.
+  // Do not rewrite valid teaspoon quantities just to satisfy a database constraint.
+  if (body.itemType === "ingredient") {
+    const { data: ingredient, error: ingredientError } = await supabaseAdmin
+      .from("ingredients")
+      .select("measurement_kind")
+      .eq("id", body.sourceId)
+      .single();
+
+    if (ingredientError || !ingredient) {
+      return NextResponse.json({ error: "Ingredient was not found." }, { status: 404 });
+    }
+
+    if (
+      ingredient.measurement_kind === "solid" &&
+      unit === "tbsp" &&
+      quantity >= 2
+    ) {
+      return NextResponse.json(
+        { error: "Solid quantities of 2 tbsp or more must be entered in grams or kilograms." },
+        { status: 400 },
+      );
+    }
   }
 
   const { count } = await supabaseAdmin
