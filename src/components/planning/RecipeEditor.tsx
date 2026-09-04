@@ -189,16 +189,12 @@ export default function RecipeEditor({
     itemType === "ingredient"
       ? ingredients.find((ingredient) => ingredient.id === sourceId)
       : undefined;
-  const selectedComponent =
-    itemType === "component"
-      ? components.find((component) => component.id === sourceId)
-      : undefined;
   const availableUnits = useMemo(
     () =>
-      unitsFor(
-        selectedIngredient?.measurementKind ?? selectedComponent?.yieldKind,
-      ),
-    [selectedIngredient?.measurementKind, selectedComponent?.yieldKind],
+      itemType === "component"
+        ? unitsFor(undefined)
+        : unitsFor(selectedIngredient?.measurementKind),
+    [itemType, selectedIngredient?.measurementKind],
   );
 
   function begin() {
@@ -502,9 +498,8 @@ export default function RecipeEditor({
     setSourceId(nextId);
     const ingredient = ingredients.find((entry) => entry.id === nextId);
     const component = components.find((entry) => entry.id === nextId);
-    const nextUnits = unitsFor(
-      ingredient?.measurementKind ?? component?.yieldKind,
-    );
+    const nextUnits =
+      component ? unitsFor(undefined) : unitsFor(ingredient?.measurementKind);
     setUnit(nextUnits[0] ?? "g");
   }
 
@@ -603,11 +598,28 @@ export default function RecipeEditor({
 
       <section className="border border-zinc-700 bg-zinc-950 p-4">
         <h2 className="text-lg font-semibold">Ingredients and components</h2>
-        <div className="mt-4 grid gap-3 lg:grid-cols-[10rem_1fr_7rem_8rem_1fr_auto]">
-          <select value={itemType} onChange={(event) => { setItemType(event.target.value as "ingredient" | "component"); setSourceId(""); }} className="border border-zinc-600 bg-black px-3 py-2">
-            <option value="ingredient">Purchased</option>
-            <option value="component">Component</option>
-          </select>
+        <div className="mt-4 grid gap-3 lg:grid-cols-[auto_1fr_7rem_8rem_1fr_auto]">
+          <div className="flex">
+            {(["ingredient", "component"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  setItemType(value);
+                  setSourceId("");
+                  setUnit(value === "component" ? "g" : unit);
+                }}
+                className={
+                  "border px-3 py-2 " +
+                  (itemType === value
+                    ? "border-blue-500 bg-blue-950 text-blue-100"
+                    : "border-zinc-600 bg-black text-zinc-300")
+                }
+              >
+                {value === "ingredient" ? "Purchased" : "Component"}
+              </button>
+            ))}
+          </div>
           <select value={sourceId} onChange={(event) => changeSource(event.target.value)} className="border border-zinc-600 bg-black px-3 py-2">
             <option value="">Choose {itemType}</option>
             {sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
@@ -625,7 +637,7 @@ export default function RecipeEditor({
             const sourceKind =
               item.itemType === "ingredient"
                 ? ingredients.find((entry) => entry.id === item.ingredientId)?.measurementKind
-                : recipes.find((entry) => entry.id === item.componentRecipeId)?.yieldKind;
+                : undefined;
             const rowUnits = unitsFor(sourceKind);
             return editingItemId === item.id ? (
               <div key={item.id} className="grid gap-2 border-b border-zinc-800 px-3 py-2 last:border-b-0 md:grid-cols-[auto_7rem_8rem_1fr_1.5fr_auto_auto]">
