@@ -96,6 +96,14 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
     recipe.incompleteIngredients.length === 0,
   );
   const printable = labelJobs.length > 0;
+  const printedLabels = labelJobs.flatMap((job) => {
+    const jobRecipe = recipes.find((item) => item.recipeId === job.recipeId);
+    if (!jobRecipe) return [];
+    return Array.from({ length: job.copies }, (_, index) => ({ job, jobRecipe, key: `${job.id}-${index}` }));
+  });
+  const printPages = Array.from({ length: Math.ceil(printedLabels.length / 6) }, (_, index) =>
+    printedLabels.slice(index * 6, index * 6 + 6),
+  );
 
   function chooseRecipe(id: string) {
     const selected = recipes.find((item) => item.recipeId === id);
@@ -247,11 +255,10 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
 
       {labelJobs.length > 0 && (
         <div className="label-sheet mt-6">
-          {labelJobs.flatMap((job) => {
-            const jobRecipe = recipes.find((item) => item.recipeId === job.recipeId);
-            if (!jobRecipe) return [];
-            return Array.from({ length: job.copies }, (_, index) => (
-            <article className="food-label" key={`${job.id}-${index}`}>
+          {printPages.map((page, pageIndex) => (
+            <div className="label-page" key={`label-page-${pageIndex}`}>
+            {page.map(({ job, jobRecipe, key }) => (
+            <article className="food-label" key={key}>
               <header className="food-label-header">
                 {/* This is the same production logo asset used by the admin label report. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -272,8 +279,9 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
               <p className="food-label-storage">KEEP REFRIGERATED AT 40°F OR BELOW</p>
               <footer>The Unseen Chef · {businessAddress}</footer>
             </article>
-          ));
-          })}
+            ))}
+            </div>
+          ))}
         </div>
       )}
     </div>
