@@ -4,62 +4,82 @@
 
 **Name:** Unseen Chef Cookbook  
 **Repository:** `unseen-chef-book`  
-**Planned URL:** `book.theunseenchef.com`
+**URL:** `book.theunseenchef.com`
 
-The Cookbook is a separate Next.js application that shares the existing Supabase project used by the other Unseen Chef applications.
+The Cookbook is a separate Next.js application sharing the existing Supabase project used by the other Unseen Chef applications.
 
-It manages the culinary information required to turn production totals into shopping lists, scaled recipes, prep sheets, and production documents.
+Its job is to manage culinary knowledge and turn production data into useful kitchen work.
 
----
+## Application boundary
 
-## Scope
+The Cookbook owns or presents:
 
-The Cookbook is responsible for:
-
-- Recipes
-- Ingredients
-- Recipe scaling
-- Component recipes
-- Menu item to recipe relationships
-- Production totals by food item
+- Recipes and recipe editing
+- Purchased ingredients
+- Prepared component recipes
+- Recipe ingredients/components and steps
+- Main dishes and sides
+- Menu-item-to-recipe relationships
+- Allergen/reference data used by kitchen workflows
+- Production totals
 - Shopping lists
-- Prep sheets
-- Production documents
+- Prep lists
+- Cook views and recipe search
+- Reconciliation and data-repair workflows
+- Retail/grab-and-go labels
 
-The Cookbook is not responsible for:
+It is not responsible for customer management, contact information, delivery addresses, payments, accounting, order administration, or marketing content.
 
-- Customer names
-- Customer contact information
-- Delivery addresses
-- Payments
-- Accounting
-- Order administration
-- Marketing content
+The Cookbook may read shared order/menu data required to determine what food must be produced.
 
-The application may read production totals from shared order data, but it should expose only food items and quantities.
+## Current navigation
 
----
+```text
+Planning
+  Menu Items
+  Main Dishes
+  Components
+  Sides
+  Ingredients
+  Allergens
+  Categories
+  Protein Types
+  Reconciliation
+  Data Repair
 
-## Core Design Principle
+Production
+  Production List
+  Shopping List
+  Prep List
+  Labels
 
-The Cookbook is a kitchen production tool.
+Cook
+  This Week
+  Recipe Search
+```
 
-It should help answer:
+## Culinary data model
 
-- What food needs to be made?
-- How much needs to be made?
-- What ingredients are required?
-- What can be prepared ahead?
-- What recipe should the cook follow?
+A purchased product is an ingredient. A preparation with its own recipe is a recipe/component and should be referenced rather than copied into another recipe.
 
-The interface should be compact, clear, and practical.
-The Cookbook thinks in food, not customers.
+Current recipe categories are:
 
----
+- main
+- side
+- component
+- sauce
+- dressing
+- dessert
+- bread
+- other
+
+Recipes support yields, ingredients/components, steps, notes, equipment, and editing. Shared culinary information should be stored once and reused wherever possible.
+
+Reconciliation is an explicit part of the application. Imported or legacy records can be reviewed as unreviewed, needs classification, minor, major, or ready. Unresolved data should remain visible rather than being silently guessed away.
 
 ## Technology
 
-Initial stack:
+Current stack:
 
 - Next.js
 - React
@@ -70,36 +90,22 @@ Initial stack:
 - ESLint
 - npm
 
-The application will use the same Supabase project as the public ordering and admin applications.
+The application uses the same Supabase project as the ordering and admin applications. Shared tables and existing database behavior are reused rather than recreated locally.
 
-Shared tables should be reused rather than duplicated.
+## Interface
 
----
+The Cookbook is dark mode only. There is no light mode. If someone does not like dark mode, they are not invited.
 
-## Application Boundary
+The interface should favor speed, clarity, information density, predictable navigation, and minimal unnecessary interaction. Mobile use is supported, while desktop remains preferable for substantial recipe editing.
 
-The other applications remain responsible for their existing work.
+## Printing
 
-```text
-www.theunseenchef.com
-Marketing and public information
+Printing is production functionality. Navigation and controls should disappear from printed output; layouts should be compact, readable, black-and-white friendly, and reliable on ordinary printers.
 
-order.theunseenchef.com
-Customer ordering
+Avery 6464 labels use a six-label letter-size layout. Label printing must preserve physical label alignment and must not create blank trailing pages.
 
-admin.theunseenchef.com
-Orders, customers, reports, menu management, accounting
+## Design rule
 
-book.theunseenchef.com
-Recipes, ingredients, shopping, prep, production
-```
+The Cookbook thinks in food, not customers.
 
----
-
-## Appearance
-
-The Cookbook uses dark mode only.
-
-There is no light mode.
-
-If someone does not like dark mode, they are not invited.
+Every feature should answer a real kitchen question: what needs to be made, how much, what is required, what can be prepared ahead, what recipe should be followed, or what information must accompany the food.
