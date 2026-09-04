@@ -54,19 +54,20 @@ export default function IngredientCatalog({ ingredients }: { ingredients: Ingred
         </div>
         {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
       </section>
-      <div className="border border-zinc-800">
-        {ingredients.length === 0 ? <p className="p-4 text-sm text-zinc-400">No purchased ingredients yet.</p> : ingredients.map((ingredient) => editingId === ingredient.id ? (
-          <div key={ingredient.id} className="grid gap-2 border-b border-zinc-800 px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_12rem_auto_auto]">
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} className="border border-zinc-600 bg-black px-3 py-2" />
-            <select value={editKind} onChange={(e) => setEditKind(e.target.value as IngredientRecord["measurementKind"])} className="border border-zinc-600 bg-black px-3 py-2"><option value="solid">Solid</option><option value="liquid">Liquid</option><option value="countable">Countable</option></select>
-            <button type="button" onClick={saveIngredient} disabled={busy || !editName.trim()} className="border border-blue-500 px-3 py-2 disabled:opacity-40">Save</button>
-            <button type="button" onClick={() => setEditingId(null)} disabled={busy} className="border border-zinc-600 px-3 py-2 disabled:opacity-40">Cancel</button>
+
+      <div className="grid grid-cols-1 gap-px bg-zinc-800 border border-zinc-800 md:grid-cols-2">
+        {ingredients.length === 0 ? <p className="col-span-full bg-zinc-950 p-4 text-sm text-zinc-400">No purchased ingredients yet.</p> : ingredients.map((ingredient) => editingId === ingredient.id ? (
+          <div key={ingredient.id} className="grid gap-2 bg-zinc-950 p-3 sm:grid-cols-[1fr_9rem_auto_auto]">
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} className="min-w-0 border border-zinc-600 bg-black px-3 py-2" />
+            <select value={editKind} onChange={(e) => setEditKind(e.target.value as IngredientRecord["measurementKind"])} className="border border-zinc-600 bg-black px-2 py-2"><option value="solid">Solid</option><option value="liquid">Liquid</option><option value="countable">Countable</option></select>
+            <button type="button" onClick={saveIngredient} disabled={busy || !editName.trim()} className="border border-blue-500 px-2 py-2 disabled:opacity-40">Save</button>
+            <button type="button" onClick={() => setEditingId(null)} disabled={busy} className="border border-zinc-600 px-2 py-2 disabled:opacity-40">Cancel</button>
           </div>
         ) : (
-          <div key={ingredient.id} className="flex items-center gap-3 border-b border-zinc-800 px-4 py-3 last:border-b-0">
-            <button type="button" title="Edit ingredient" onClick={() => beginEdit(ingredient)} className="border border-zinc-600 px-2 py-1">✎</button>
-            <span className="flex-1">{ingredient.name}</span>
-            <span className="text-sm capitalize text-zinc-400">{ingredient.measurementKind}</span>
+          <div key={ingredient.id} className="flex min-w-0 items-center gap-3 bg-zinc-950 px-4 py-3">
+            <button type="button" title="Edit ingredient" onClick={() => beginEdit(ingredient)} className="shrink-0 border border-zinc-600 px-2 py-1">✎</button>
+            <span className="min-w-0 flex-1 truncate">{ingredient.name}</span>
+            <span className="shrink-0 text-sm capitalize text-zinc-400">{ingredient.measurementKind}</span>
           </div>
         ))}
       </div>
