@@ -1,49 +1,22 @@
-# Cookbook database changes
+# Supabase
 
-These migrations implement the approved additive Cookbook architecture. They
-do not replace or delete the legacy tables.
+The Unseen Chef Cookbook uses the existing shared production Supabase project.
 
-## Safety order
+The historical one-time SQL migration and verification files that originally built the Cookbook database changes have been removed from this repository after they were applied. Deleting those files from Git does not remove or roll back database objects already present in Supabase.
 
-1. Export the affected production tables and schema.
-2. Restore the export into a non-production Supabase project.
-3. Apply migrations in filename order.
-4. Run `verification/verify_cookbook_foundation.sql`.
-5. Require `passed: true`, an empty `failures` array, no broken dependencies,
-   and no source collisions.
-6. Inspect the reconciliation counts and confirm the two known unmatched
-   embedded sides remain explicit: `Basmati Rice` and
-   `Garlic Roasted Broccoli`.
-7. Assign the initial owner role using the authenticated user's UUID in the
-   Supabase dashboard. Do not identify the owner by display name.
-8. After the same sequence succeeds against the intended target and the initial
-   owner can read it, enable `COOKBOOK_V2_RECONCILIATION_ENABLED`. Set it to
-   `false` for an immediate fallback to the legacy page.
+## Source of truth
 
-## Initial owner bootstrap
+For the current application, the live Supabase schema and behavior are authoritative. Application code should use the existing database objects rather than assuming this repository can recreate the database from a local migration history.
 
-Run this once through an administrative database session, replacing the UUID
-with the verified `auth.users.id`:
+Do not invent, recreate, or rerun historical migrations merely because the old SQL files are absent.
 
-```sql
-insert into public.cookbook_user_roles (user_id, role)
-values ('00000000-0000-0000-0000-000000000000', 'owner')
-on conflict (user_id, role) do nothing;
-```
+## Future database changes
 
-The placeholder UUID is intentionally unusable as an owner identity. Never
-guess this value and never select a user based only on a name.
+If a future feature genuinely requires a database change:
 
-## Migration contents
+1. Inspect the current live schema and existing application usage first.
+2. Make the smallest additive/safe change required for the feature.
+3. Treat production data as persistent and valuable; do not destructively replace working structures without an explicit migration plan.
+4. Update the application documentation to describe the resulting current state.
 
-- `20260902171000_add_cookbook_foundation.sql` adds roles, immutable approved
-  versions, aggregate drafts, identity decisions, production identities,
-  intake jobs, reconciliation tasks, audit events, and RLS policies.
-- `20260902172000_backfill_cookbook_foundation.sql` deterministically snapshots
-  every complete recipe, preserves legacy drafts, maps stable menu/side/bulk
-  catalog IDs, preserves current recipe links, and creates the complete missing
-  recipe queue.
-
-Both migrations are designed to preserve existing IDs and legacy rows. The
-backfill uses deterministic derived UUIDs so a rehearsal can be compared
-exactly and guarded inserts do not create duplicate migrated records.
+The goal of this repository is the working Cookbook application, not preservation of one-time SQL for its own sake.
