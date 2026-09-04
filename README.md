@@ -1,281 +1,89 @@
 # Unseen Chef Cookbook
 
-The Unseen Chef Cookbook is the production and recipe management system for The Unseen Chef.
+The Unseen Chef Cookbook is the kitchen production and recipe-management system for The Unseen Chef.
 
-This application exists to help transform customer orders into food.
+It turns shared menu/order data and the cookbook database into practical kitchen work: recipes, production totals, shopping, prep, cooking references, and retail/grab-and-go labels.
 
-It is not a public recipe website.
+It is not the public website, ordering application, accounting system, or customer-management system.
 
-It is not a restaurant ERP.
+## Current application
 
-It is not an accounting application.
+The application is a Next.js/React/TypeScript App Router application using Tailwind CSS and the same Supabase project as the other Unseen Chef applications. Authentication is implemented and the application is dark-mode only.
 
-It is the operational cookbook used to plan, prepare, and execute weekly production.
+Current navigation is:
 
-The Cookbook is designed around how a working kitchen actually operates.
-
----
-
-# Purpose
-
-The Cookbook answers questions such as:
-
-- What do we need to buy?
-- What do we need to prep?
-- What do we need to cook?
-- How much of every ingredient is required?
-- What recipes are used this week?
-- What can be completed ahead of time?
-
-Everything in the application should make production easier.
-
----
-
-# Philosophy
-
-The Cookbook is a production system.
-
-Recipes are the foundation, but recipes are not the product.
-
-The product is making weekly production faster, easier, more accurate, and more consistent.
-
-The application should reduce mistakes, reduce repetitive work, and preserve institutional knowledge.
-
-If a feature does not improve Friday planning, Sunday preparation, or Monday production, it probably does not belong in Version 1.
-
----
-
-# Weekly Workflow
-
-## Friday
-
-Planning day.
-
-After orders close:
-
-- Review production totals.
-- Generate shopping lists.
-- Scale recipes.
-- Purchase ingredients.
-- Plan production.
-
----
-
-## Sunday
-
-Preparation day.
-
-Complete work that can be performed ahead of production.
-
-Examples include:
-
-- Marinades
-- Sauces
-- Stocks
-- Dressings
-- Desserts
-- Vegetable preparation
-
----
-
-## Monday
-
-Production day.
-
-Cook, assemble, package, and complete customer orders.
-
-The Cookbook should provide every recipe, quantity, and prep document required to complete production.
-
----
-
-# Relationship to Other Applications
-
-The Unseen Chef consists of several independent applications that share a common Supabase database.
-
-## Marketing
-
-www.theunseenchef.com
-
-Responsible for:
-
-- Marketing
-- Information
-- Gallery
-- Reviews
-- Company information
-
----
-
-## Ordering
-
-order.theunseenchef.com
-
-Responsible for:
-
-- Customer ordering
-- Menu browsing
-- Checkout
-- Order submission
-
----
-
-## Administration
-
-admin.theunseenchef.com
-
-Responsible for:
-
-- Orders
-- Customers
-- Reports
-- Accounting
-- Menu management
-- Business administration
-
----
-
-## Cookbook
-
-book.theunseenchef.com
-
-Responsible for:
-
-- Recipes
+### Planning
+- Menu Items
+- Main Dishes
+- Components
+- Sides
 - Ingredients
+- Allergens
+- Categories
+- Protein Types
+- Reconciliation
+- Data Repair
+
+### Production
+- Production List
+- Shopping List
+- Prep List
+- Labels
+
+### Cook
+- This Week
+- Recipe Search
+
+The selected production week is shared across the protected application.
+
+## Recipes and culinary data
+
+The cookbook now has working recipe, ingredient, component, menu-item relationship, and recipe-step infrastructure rather than placeholder-only screens.
+
+Recipe data distinguishes purchased ingredients from prepared recipes/components. Recipes support yields, ingredient/component lines, instructions, notes, equipment, and editing. The current cookbook-v2 domain recognizes main, side, component, sauce, dressing, dessert, bread, and other recipe categories.
+
+The reconciliation workflow supports review buckets for unreviewed, needs-classification, minor, major, and ready records, with draft states for editing, ready-for-review, blocked, failed, and archived work. It exists to turn imported/legacy culinary information into clean cookbook records without silently losing unresolved data.
+
+Planning also includes reference catalogs for allergens, categories, protein types, main dishes, sides, and menu-item relationships, plus data-repair tooling for duplicate or inconsistent records.
+
+## Production
+
+Production reads food-production information without making the Cookbook responsible for customers, payments, or accounting.
+
+Current production tooling includes:
+
+- Production lists
 - Shopping lists
-- Production
-- Prep sheets
-- Kitchen documentation
+- Prep lists
+- Production-week selection
+- Recipe access for cooking
+- Avery 6464 retail/grab-and-go label generation
 
-Each application has a clearly defined responsibility.
+Labels can be built from approved recipe/menu data, include ingredient and allergen information, allow side selections where required, and print six labels to a letter-size Avery 6464 sheet. Print CSS is treated as production functionality, not decoration.
 
-The Cookbook does not manage customers, payments, accounting, or marketing.
+## Relationship to other Unseen Chef applications
 
----
+- `www.theunseenchef.com` — marketing and public information
+- `order.theunseenchef.com` — customer ordering and checkout
+- `admin.theunseenchef.com` — orders, customers, reports, accounting, menu management, and business administration
+- `book.theunseenchef.com` — recipes, culinary reference data, production, shopping, prep, cooking, reconciliation, data repair, and labels
 
-# Design Philosophy
+The applications share Supabase data where appropriate, but each application has a distinct responsibility.
 
-The Cookbook is a production tool.
+## Operating philosophy
 
-The interface should favor speed, clarity, and information density over visual decoration.
+The Cookbook is a production tool. Recipes are foundational data; the product is faster, easier, more accurate, and more consistent kitchen production.
 
-Design principles include:
+Design priorities are information density, predictable navigation, minimal clicks, minimal unnecessary whitespace, useful mobile access, and reliable printing. Decorative complexity is a negative unless it makes kitchen work easier.
 
-- Information first.
-- Minimize clicks.
-- Minimize scrolling.
-- Minimize unnecessary whitespace.
-- Avoid unnecessary animations.
-- Avoid decorative graphics.
-- Prefer text over ambiguous icons.
-- Keep navigation predictable.
-- Keep workflows simple.
-- Optimize for kitchen use.
+Store information once and reuse it. Purchased products are ingredients; preparations with their own recipe are components. The database should preserve The Unseen Chef's institutional culinary knowledge instead of requiring the cook to repeatedly re-enter it.
 
-Every screen should answer the question:
+## Printing
 
-"What is the cook trying to accomplish right now?"
+Printing is a first-class feature. Kitchen documents should maximize useful information per page, remove application chrome, avoid decorative graphics, print cleanly in black and white, and behave reliably on ordinary office printers.
 
----
+## Development philosophy
 
-# Printing
+Build the smallest solution that completely solves the actual production problem. Prefer maintainable code and existing shared data over duplicated systems. Do not add infrastructure merely because it might someday be useful.
 
-Printing is a first-class feature.
-
-Kitchen documents are working documents.
-
-Recipes, shopping lists, prep sheets, and production reports should print in a compact, highly readable format.
-
-Printed documents should:
-
-- Maximize useful information per page.
-- Eliminate unnecessary whitespace.
-- Remove navigation and interface controls.
-- Never include decorative graphics or emojis.
-- Use clean typography.
-- Avoid awkward page breaks whenever practical.
-- Print well in black and white.
-- Print reliably on inexpensive office printers.
-
-The goal is not beautiful printouts.
-
-The goal is useful printouts.
-
-Every printed page should look comfortable on a clipboard in a professional kitchen.
-
----
-
-# Mobile
-
-The Cookbook should work naturally on a phone.
-
-A cook should be able to:
-
-- Read recipes.
-- View shopping lists.
-- View prep sheets.
-- Search ingredients.
-- Edit recipes.
-- Update notes.
-
-Mobile editing must be fully supported.
-
-Desktop remains the preferred environment for creating and heavily editing recipes because larger screens and keyboards provide a better editing experience.
-
----
-
-# Data Philosophy
-
-Store information once.
-
-Reuse it everywhere.
-
-Examples include:
-
-- One ingredient can appear in many recipes.
-- One recipe can appear on many menus.
-- One component recipe can be reused by many finished recipes.
-
-Avoid duplicate information whenever practical.
-
-The database should become the institutional culinary knowledge of The Unseen Chef.
-
----
-
-# Future Vision
-
-The Cookbook should eventually become the single source of truth for kitchen operations.
-
-Possible future capabilities include:
-
-- Component recipes
-- Recipe version history
-- Shopping list generation
-- Prep sheet generation
-- Production planning
-- Ingredient costing
-- Inventory
-- Nutrition
-- Allergen information
-- Vendor purchasing
-- Yield tracking
-- Recipe notes
-- Kitchen documentation
-
-These features should only be added when they provide measurable value to production.
-
----
-
-# Development Philosophy
-
-Build the smallest solution that completely solves today's problem.
-
-Avoid unnecessary complexity.
-
-Prefer clean architecture over clever code.
-
-Favor maintainability over shortcuts.
-
-When making design decisions, optimize for the person standing in the kitchen at 6:30 AM on Monday with flour on their hands.
-
-If that person can accomplish their task faster, the feature is successful.
+When documentation and the running application disagree, the running application and current database behavior are the facts that documentation must be brought back into alignment with.
