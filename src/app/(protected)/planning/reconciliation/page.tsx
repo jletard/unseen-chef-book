@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import DraftTrashControl from "@/components/planning/DraftTrashControl";
 import MenuItemCatalog from "@/components/planning/MenuItemCatalog";
 import ReconciliationDashboardV2 from "@/components/planning/ReconciliationDashboardV2";
 import { getMenuItems } from "@/lib/cookbook-data";
@@ -13,7 +14,10 @@ export default async function ReconciliationPage() {
   if (process.env.COOKBOOK_V2_RECONCILIATION_ENABLED !== "false") {
     const dashboard = await getReconciliationDashboardV2();
     return (
-      <ReconciliationDashboardV2 dashboard={dashboard} />
+      <>
+        <DraftTrashControl drafts={dashboard.drafts} />
+        <ReconciliationDashboardV2 dashboard={dashboard} />
+      </>
     );
   }
 
