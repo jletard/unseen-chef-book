@@ -72,3 +72,40 @@ export async function PATCH(
     draftPayload: data.draft_payload,
   });
 }
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const { id } = await context.params;
+  if (!uuidPattern.test(id)) {
+    return NextResponse.json({ error: "Invalid draft ID." }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+
+  const { data, error } = await supabase
+    .from("recipe_drafts")
+    .update({
+      draft_state: "archived",
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("draft_state", "ready_for_review")
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    const forbidden = error.code === "42501";
+    return NextResponse.json(
+      { error: forbidden ? "Cookbook editor access is required." : error.message },
+      { status: forbidden ? 403 : 400 },
+    );
+  }
+  if (!data) return NextResponse.json({ error: "Reviewable draft not found." }, { status: 404 });
+
+  return NextResponse.json({ id: data.id, archived: true });
+}
