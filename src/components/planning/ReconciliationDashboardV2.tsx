@@ -632,6 +632,23 @@ function FastReviewWorkspace({
     }
   }
 
+  async function discardDraft(draft: ReconciliationDraftRow) {
+    setBusyDraftId(draft.id);
+    try {
+      const response = await fetch(`/api/reconciliation/drafts/${draft.id}`, {
+        method: "DELETE",
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Draft could not be discarded.");
+      setDrafts((existing) => existing.filter((item) => item.id !== draft.id));
+      setMessage(`Discarded duplicate draft “${draft.name}”.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Draft could not be discarded.");
+    } finally {
+      setBusyDraftId(null);
+    }
+  }
+
   async function saveDraft(
     draft: ReconciliationDraftRow,
     draftPayload: Record<string, unknown>,
@@ -888,6 +905,7 @@ function FastReviewWorkspace({
           busy={busyDraftId === current.id}
           stage={stage}
           onMove={(bucket) => moveDraft(current, bucket)}
+          onDiscard={() => discardDraft(current)}
           onSave={(payload, markReady) => saveDraft(current, payload, markReady)}
           onMajorImport={(values) => importMajorRevision(current, values)}
           onPrevious={() => setReviewOffset((offset) => offset <= 0 ? Math.max(stageDrafts.length - 1, 0) : offset - 1)}
@@ -905,6 +923,7 @@ function DraftReviewCard({
   busy,
   stage,
   onMove,
+  onDiscard,
   onSave,
   onMajorImport,
   onPrevious,
@@ -916,6 +935,7 @@ function DraftReviewCard({
   busy: boolean;
   stage: ReviewStage;
   onMove: (bucket: ReviewStage) => void;
+  onDiscard: () => void;
   onSave: (payload: Record<string, unknown>, markReady: boolean) => Promise<void>;
   onMajorImport: (values: Record<string, unknown>) => Promise<void>;
   onPrevious: () => void;
@@ -949,6 +969,7 @@ function DraftReviewCard({
             <>
               <button disabled={busy} onClick={() => onMove("ready")} className="border border-emerald-600 px-5 py-2 font-semibold text-emerald-300 disabled:opacity-40">Keep</button>
               <button disabled={busy} onClick={() => onMove("needs_classification")} className="border border-amber-600 px-5 py-2 font-semibold text-amber-300 disabled:opacity-40">Edit</button>
+              <button disabled={busy} onClick={onDiscard} className="border border-red-700 px-5 py-2 font-semibold text-red-300 disabled:opacity-40">Discard</button>
             </>
           )}
           {stage === "needs_classification" && (
