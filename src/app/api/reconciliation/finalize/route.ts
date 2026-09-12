@@ -174,11 +174,21 @@ export async function POST() {
       );
     }
     const orderedDrafts = dependencyOrder(drafts);
-    const { data, error } = await supabase.rpc("finalize_ready_recipe_drafts", {
-      ready_draft_ids: orderedDrafts.map((draft) => draft.id),
-    });
-    if (error) throw new Error(error.message);
-    const finalized = Array.isArray(data) ? data : [];
+    const finalized: unknown[] = [];
+
+    for (const draft of orderedDrafts) {
+      const draftName = typeof draft.draft_payload.name === "string"
+        ? draft.draft_payload.name
+        : draft.id;
+      const { data, error } = await supabase.rpc("finalize_ready_recipe_drafts", {
+        ready_draft_ids: [draft.id],
+      });
+      if (error) {
+        throw new Error(`Finalization failed for "${draftName}": ${error.message}`);
+      }
+      if (Array.isArray(data)) finalized.push(...data);
+    }
+
     return NextResponse.json({ finalizedCount: finalized.length, finalized });
   } catch (error) {
     return NextResponse.json(
