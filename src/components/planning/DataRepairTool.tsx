@@ -297,11 +297,11 @@ export default function DataRepairTool({ menuItems, records }: Props) {
         {matches.length === 0 ? (
           <p className="mt-3 text-sm text-zinc-400">No matches found.</p>
         ) : (
-          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-3 columns-1 gap-2 md:columns-2 xl:columns-3">
             {matches.map((record) => (
               <label
                 key={record.id}
-                className="flex cursor-pointer items-center gap-3 border border-zinc-700 p-3"
+                className="mb-2 flex break-inside-avoid cursor-pointer items-center gap-3 border border-zinc-700 p-3"
               >
                 <input
                   type="checkbox"
