@@ -8,7 +8,11 @@ import type {
   ReferenceRecord,
 } from "@/types/cookbook-data";
 
-type RepairDataset = "sides" | "categories" | "proteinTypes";
+type RepairDataset =
+  | "sides"
+  | "categories"
+  | "proteinTypes"
+  | "ingredients";
 
 type Props = {
   menuItems: MenuItemRecord[];
@@ -19,6 +23,7 @@ const labels: Record<RepairDataset, string> = {
   sides: "Sides",
   categories: "Categories",
   proteinTypes: "Protein Types",
+  ingredients: "Ingredients",
 };
 
 function referencedBy(
@@ -26,6 +31,8 @@ function referencedBy(
   selectedNames: Set<string>,
   item: MenuItemRecord,
 ) {
+  if (dataset === "ingredients") return false;
+
   if (dataset === "sides") {
     return item.sides.some((side) => selectedNames.has(side));
   }
@@ -79,9 +86,10 @@ export default function DataRepairTool({ menuItems, records }: Props) {
       (record) => record.name,
     ),
   );
-  const affectedMenuItems = menuItems.filter((item) =>
-    referencedBy(dataset, selectedNames, item),
-  );
+  const affectedMenuItems =
+    dataset === "ingredients"
+      ? []
+      : menuItems.filter((item) => referencedBy(dataset, selectedNames, item));
   const canonical = selectedRecords.find(
     (record) => record.id === canonicalChoice,
   );
@@ -144,7 +152,13 @@ export default function DataRepairTool({ menuItems, records }: Props) {
         ? "Remove " +
             duplicateList +
             " from current menu items and permanently delete the selected side records? Historical orders will not change."
-        : 'Merge ' +
+        : dataset === "ingredients"
+          ? 'Merge ' +
+            duplicateList +
+            ' into "' +
+            targetName +
+            '"? Recipe ingredient references will be reassigned to the canonical ingredient and the duplicate ingredient records will be permanently removed.'
+          : 'Merge ' +
             duplicateList +
             ' into "' +
             targetName +
@@ -160,7 +174,11 @@ export default function DataRepairTool({ menuItems, records }: Props) {
     setError("");
 
     try {
-      const response = await fetch("/api/data-repair/merge", {
+      const endpoint =
+        dataset === "ingredients"
+          ? "/api/data-repair/ingredients/merge"
+          : "/api/data-repair/merge";
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -176,13 +194,21 @@ export default function DataRepairTool({ menuItems, records }: Props) {
         canonicalName?: string;
         mergedCount?: number;
         changedMenuItems?: string[];
+        changedRecipes?: string[];
       };
 
       if (!response.ok) {
         throw new Error(result.error || "The merge failed.");
       }
 
-      const changedCount = result.changedMenuItems?.length ?? 0;
+      const changedCount =
+        dataset === "ingredients"
+          ? result.changedRecipes?.length ?? 0
+          : result.changedMenuItems?.length ?? 0;
+      const changedLabel =
+        dataset === "ingredients"
+          ? "recipe" + (changedCount === 1 ? "" : "s")
+          : "current menu item" + (changedCount === 1 ? "" : "s");
 
       setMessage(
         usingRemove
@@ -192,9 +218,12 @@ export default function DataRepairTool({ menuItems, records }: Props) {
               (result.mergedCount === 1 ? "" : "s") +
               ". Updated " +
               changedCount +
-              " current menu item" +
-              (changedCount === 1 ? "." : "s.")
-          : "Merged " +
+              " " +
+              changedLabel +
+              "."
+          : usingOther && (result.mergedCount ?? 0) === 0
+            ? 'Renamed to "' + result.canonicalName + '".'
+            : "Merged " +
               result.mergedCount +
               " duplicate" +
               (result.mergedCount === 1 ? "" : "s") +
@@ -202,8 +231,9 @@ export default function DataRepairTool({ menuItems, records }: Props) {
               result.canonicalName +
               '". Updated ' +
               changedCount +
-              " current menu item" +
-              (changedCount === 1 ? "." : "s."),
+              " " +
+              changedLabel +
+              ".",
       );
       setQuery("");
       setSelectedIds([]);
@@ -249,7 +279,11 @@ export default function DataRepairTool({ menuItems, records }: Props) {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={'Try "vegetable", "beans", or "potato"'}
+              placeholder={
+                dataset === "ingredients"
+                  ? 'Try "worc", "cream", or "pepper"'
+                  : 'Try "vegetable", "beans", or "potato"'
+              }
               className="w-full border border-zinc-600 bg-black px-3 py-2"
             />
           </label>
@@ -260,32 +294,32 @@ export default function DataRepairTool({ menuItems, records }: Props) {
         <h2 className="text-lg font-semibold">
           {query.trim() ? "Matches" : labels[dataset]} ({matches.length})
         </h2>
-          {matches.length === 0 ? (
-            <p className="mt-3 text-sm text-zinc-400">No matches found.</p>
-          ) : (
-            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-              {matches.map((record) => (
-                <label
-                  key={record.id}
-                  className="flex cursor-pointer items-center gap-3 border border-zinc-700 p-3"
+        {matches.length === 0 ? (
+          <p className="mt-3 text-sm text-zinc-400">No matches found.</p>
+        ) : (
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {matches.map((record) => (
+              <label
+                key={record.id}
+                className="flex cursor-pointer items-center gap-3 border border-zinc-700 p-3"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(record.id)}
+                  onChange={() => toggleRecord(record.id)}
+                />
+                <span className="flex-1">{record.name}</span>
+                <span
+                  className={
+                    record.active ? "text-emerald-400" : "text-zinc-500"
+                  }
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(record.id)}
-                    onChange={() => toggleRecord(record.id)}
-                  />
-                  <span className="flex-1">{record.name}</span>
-                  <span
-                    className={
-                      record.active ? "text-emerald-400" : "text-zinc-500"
-                    }
-                  >
-                    {record.active ? "Active" : "Inactive"}
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
+                  {record.active ? "Active" : "Inactive"}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
       </section>
 
       {selectedRecords.length > 0 && (
@@ -324,7 +358,11 @@ export default function DataRepairTool({ menuItems, records }: Props) {
               <input
                 value={customName}
                 onChange={(event) => setCustomName(event.target.value)}
-                placeholder="Seasonal Vegetables"
+                placeholder={
+                  dataset === "ingredients"
+                    ? "Worcestershire Sauce"
+                    : "Seasonal Vegetables"
+                }
                 className="w-full border border-zinc-600 bg-black px-3 py-2"
                 autoFocus
               />
@@ -354,26 +392,43 @@ export default function DataRepairTool({ menuItems, records }: Props) {
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold text-zinc-300">
-                Current menu items to update ({affectedMenuItems.length})
-              </h3>
-              {affectedMenuItems.length === 0 ? (
-                <p className="mt-2 text-sm text-zinc-500">
-                  No current menu items refer to the selected duplicates.
-                </p>
+              {dataset === "ingredients" ? (
+                <>
+                  <h3 className="text-sm font-semibold text-zinc-300">
+                    Recipe references
+                  </h3>
+                  <p className="mt-2 text-sm text-zinc-500">
+                    Every recipe ingredient row that points to a duplicate will
+                    be reassigned to the canonical ingredient before the
+                    duplicate ingredient is deleted.
+                  </p>
+                </>
               ) : (
-                <ul className="mt-2 max-h-48 list-disc space-y-1 overflow-auto pl-5 text-sm">
-                  {affectedMenuItems.map((item) => (
-                    <li key={item.id}>{item.name}</li>
-                  ))}
-                </ul>
+                <>
+                  <h3 className="text-sm font-semibold text-zinc-300">
+                    Current menu items to update ({affectedMenuItems.length})
+                  </h3>
+                  {affectedMenuItems.length === 0 ? (
+                    <p className="mt-2 text-sm text-zinc-500">
+                      No current menu items refer to the selected duplicates.
+                    </p>
+                  ) : (
+                    <ul className="mt-2 max-h-48 list-disc space-y-1 overflow-auto pl-5 text-sm">
+                      {affectedMenuItems.map((item) => (
+                        <li key={item.id}>{item.name}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
               )}
             </div>
           </div>
 
-          <p className="mt-5 text-sm text-amber-300">
-            Historical order snapshots will not be changed.
-          </p>
+          {dataset !== "ingredients" && (
+            <p className="mt-5 text-sm text-amber-300">
+              Historical order snapshots will not be changed.
+            </p>
+          )}
 
           <button
             type="button"
