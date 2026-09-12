@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import ComponentRecipeLinkControl from "@/components/planning/ComponentRecipeLinkControl";
+import IdentityDecisionResolver from "@/components/planning/IdentityDecisionResolver";
 import MenuItemCatalog from "@/components/planning/MenuItemCatalog";
 import ReconciliationDashboardV2 from "@/components/planning/ReconciliationDashboardV2";
 import { getMenuItems } from "@/lib/cookbook-data";
@@ -16,6 +17,7 @@ export default async function ReconciliationPage() {
     return (
       <>
         <ComponentRecipeLinkControl drafts={dashboard.drafts} />
+        <IdentityDecisionResolver />
         <ReconciliationDashboardV2 dashboard={dashboard} />
       </>
     );
