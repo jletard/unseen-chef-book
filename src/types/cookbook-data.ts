@@ -18,12 +18,29 @@ export type ReferenceRecord = {
   sortOrder: number;
 };
 
+export type IngredientKind = "simple" | "compound";
+
 export type IngredientRecord = {
   id: string;
   name: string;
   measurementKind: "liquid" | "solid" | "countable";
+  ingredientKind: IngredientKind;
+  labelName: string;
+  ingredientStatement: string;
+  labelReviewStatus: "unreviewed" | "confirmed";
   active: boolean;
   notes: string | null;
+};
+
+export type IngredientComponentRecord = {
+  id: string;
+  parentIngredientId: string;
+  childIngredientId: string;
+  sortOrder: number;
+  quantity: number | null;
+  unit: string | null;
+  percentage: number | null;
+  sourceText: string | null;
 };
 
 export type RecipeRecord = {
