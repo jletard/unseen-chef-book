@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-const kinds = new Set(["liquid", "solid", "countable"]);
+const measurementKinds = new Set(["liquid", "solid", "countable"]);
+const ingredientKinds = new Set(["simple", "compound"]);
 
 export async function PATCH(
   request: Request,
@@ -17,22 +18,49 @@ export async function PATCH(
   const body = (await request.json()) as {
     name?: string;
     measurementKind?: string;
+    ingredientKind?: string;
+    labelName?: string;
+    ingredientStatement?: string;
   };
   const name = body.name?.trim();
   const measurementKind = body.measurementKind?.trim();
+  const ingredientKind = body.ingredientKind?.trim();
+  const labelName = body.labelName?.trim() ?? "";
+  const ingredientStatement = body.ingredientStatement?.trim() ?? "";
 
-  if (!name || !measurementKind || !kinds.has(measurementKind)) {
+  if (
+    !name ||
+    !measurementKind ||
+    !ingredientKind ||
+    !measurementKinds.has(measurementKind) ||
+    !ingredientKinds.has(ingredientKind)
+  ) {
     return NextResponse.json(
-      { error: "Name and measurement type are required." },
+      { error: "Name, measurement type, and ingredient type are required." },
       { status: 400 },
     );
   }
 
+  const update: Record<string, unknown> = {
+    name,
+    measurement_kind: measurementKind,
+    ingredient_kind: ingredientKind,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (body.labelName !== undefined) update.label_name = labelName || null;
+  if (body.ingredientStatement !== undefined) update.ingredient_statement = ingredientStatement || null;
+
+  if (body.labelName !== undefined || body.ingredientStatement !== undefined || body.ingredientKind !== undefined) {
+    update.label_review_status = "unreviewed";
+    update.label_reviewed_at = null;
+  }
+
   const { data, error } = await supabaseAdmin
     .from("ingredients")
-    .update({ name, measurement_kind: measurementKind })
+    .update(update)
     .eq("id", id)
-    .select("id, name, measurement_kind")
+    .select("id, name, measurement_kind, ingredient_kind, label_name, ingredient_statement, label_review_status")
     .single();
 
   if (error) {
