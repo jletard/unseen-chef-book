@@ -15,6 +15,7 @@ export type AllergenKey = keyof typeof allergenLabels;
 export type LabelIngredient = {
   id: string;
   name: string;
+  ingredientKind: "simple" | "compound";
   labelName: string;
   ingredientStatement: string;
   allergenKeys: AllergenKey[];
