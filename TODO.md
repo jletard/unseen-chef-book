@@ -24,21 +24,28 @@ This file tracks work that is still meaningfully unfinished. Completed foundatio
 - [x] Avery 6464 retail/grab-and-go label builder
 - [x] Purchased-ingredient label name, ingredient declaration, allergen data, dietary flags, and review status
 - [x] Recursive approved-recipe/component ingredient resolution for labels
+- [x] Purchased ingredient classification as simple or compound
+- [x] Structured compound-ingredient relationships through `ingredient_components`
+- [x] Recursive compound-ingredient label/allergen resolution with cycle/incomplete detection
 - [x] Variable/selected side support for labels
 - [x] Six-label letter-size printing without trailing blank pages
 
 ## Priority 1 — complete ingredient declarations for labels
 
-Environmental Health clarified that compound purchased foods must include their sub-ingredients in the ingredient declaration. The database and label resolver already support an ingredient statement; the immediate work is to make the workflow complete and reliable.
+Environmental Health clarified that compound purchased foods must include their sub-ingredients in the ingredient declaration. The live database now has both the authoritative supplier declaration and a structured ingredient-to-ingredient graph; the remaining work is data cleanup, review, and validation.
 
-- [ ] Review the live ingredient schema before making any database changes; preserve existing labeling columns and production data
-- [ ] Make label/ingredient-declaration editing easy to reach from the normal Ingredients workflow instead of primarily living under Allergens
-- [ ] Decide whether Ingredients and Allergens should share one editor/component so name, measurement kind, ingredient declaration, allergens, dietary flags, and review state stay together
+- [x] Review the live ingredient schema before making database changes; preserve existing labeling columns and production data
+- [x] Add `ingredients.ingredient_kind` (`simple` / `compound`) and structured `ingredient_components` relationships without replacing existing label fields
+- [x] Make ingredient type, supplier declaration, and structured child ingredients editable from the normal Ingredients workflow
+- [x] Keep prepared recipes/components recursive; do not copy their ingredient text into parent recipes
+- [x] Make compound ingredient relationships participate in recursive label/allergen resolution and block incomplete compound structures
+- [ ] Classify the existing purchased ingredient catalog, correcting compound foods that currently default to `simple`
 - [ ] Review every purchased compound ingredient used in current recipes and enter the full supplier/manufacturer ingredient declaration including sub-ingredients
+- [ ] Populate structured child ingredients for each compound purchased ingredient; preserve supplier order and do not invent quantities/percentages
 - [ ] Keep simple single-ingredient foods simple; do not create fake sub-ingredients where none exist
-- [ ] Keep prepared recipes/components recursive; do not copy their ingredient text into parent recipes
-- [ ] Add a quick filter/report for ingredients that are used by approved recipes but still have unreviewed/incomplete label data
-- [ ] Confirm label output preserves useful component grouping/parentheses while still containing the complete underlying ingredient information
+- [ ] Add an approved-recipe-usage filter/report so the cleanup queue can prioritize ingredients currently affecting labels
+- [ ] Decide whether Ingredients and Allergens should ultimately share more UI so allergen flags and declaration review can be completed without switching screens
+- [ ] Confirm label output preserves useful grouping/parentheses while still containing the complete underlying ingredient information
 - [ ] Re-test allergen aggregation and required source details for fish, crustacean shellfish, and tree nuts as ingredient declarations are completed
 - [ ] Validate several corrected labels against Environmental Health before treating the ingredient-label cleanup as finished
 
@@ -48,7 +55,7 @@ Do not add isolated calorie text to menu descriptions. Nutrition should be reusa
 
 ### Nutrition data model
 
-- [ ] Inspect the live Supabase schema for any existing nutrition-related fields/tables before adding anything
+- [x] Inspect the live Supabase schema for existing nutrition-related fields/tables; none were present as of 2026-09-15
 - [ ] Define the canonical ingredient nutrition basis, preferably a normalized mass/volume/count basis that can be converted into recipe quantities
 - [ ] Store source/provenance for nutrition data (supplier label, USDA/reference data, manual estimate, etc.)
 - [ ] Support calories, protein, carbohydrate, fat, fiber, and sodium as the first useful nutrient set
@@ -61,7 +68,7 @@ Do not add isolated calorie text to menu descriptions. Nutrition should be reusa
 - [ ] Use approved recipe quantities and approved yields as the basis for derived nutrition
 - [ ] Calculate whole-recipe nutrition and per-serving/per-portion estimates when the approved yield supports it
 - [ ] Define behavior for recipes with countable, liquid, or non-serving yields
-- [ ] Propagate nutrition recursively through prepared components using the same general dependency model used for ingredient labels
+- [ ] Propagate nutrition recursively through prepared components and structured compound ingredients
 - [ ] Detect cycles/incomplete dependencies and show incomplete nutrition rather than inventing numbers
 
 ### Nutrition output
@@ -87,7 +94,7 @@ Do not add isolated calorie text to menu descriptions. Nutrition should be reusa
 - [ ] Document which recipe model is authoritative for editing, approval, production derivation, labeling, and future nutrition
 - [ ] Avoid extending legacy paths with new nutrition/label logic unless there is a deliberate migration reason
 - [ ] Consolidate duplicated recipe/ingredient types and data-access helpers where it reduces ambiguity without destabilizing production
-- [ ] Add focused automated tests for recursive ingredient-label expansion, dependency cycles, unit conversion, recipe scaling, and future nutrition math
+- [ ] Add focused automated tests for recursive ingredient-label expansion, compound-ingredient cycles, recipe dependency cycles, unit conversion, recipe scaling, and future nutrition math
 - [ ] Add a test script/tool only when there are meaningful tests to run; do not add empty testing infrastructure for appearance
 
 ## Continue improving production use
