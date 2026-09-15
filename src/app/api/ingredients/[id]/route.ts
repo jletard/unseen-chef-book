@@ -41,6 +41,19 @@ export async function PATCH(
     );
   }
 
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("ingredients")
+    .select("ingredient_kind, label_name, ingredient_statement")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (existingError) {
+    return NextResponse.json({ error: "Ingredient could not be loaded: " + existingError.message }, { status: 500 });
+  }
+  if (!existing) {
+    return NextResponse.json({ error: "Ingredient not found." }, { status: 404 });
+  }
+
   const update: Record<string, unknown> = {
     name,
     measurement_kind: measurementKind,
@@ -51,7 +64,13 @@ export async function PATCH(
   if (body.labelName !== undefined) update.label_name = labelName || null;
   if (body.ingredientStatement !== undefined) update.ingredient_statement = ingredientStatement || null;
 
-  if (body.labelName !== undefined || body.ingredientStatement !== undefined || body.ingredientKind !== undefined) {
+  const declarationChanged = body.labelName !== undefined
+    && (existing.label_name ?? "").trim() !== labelName;
+  const statementChanged = body.ingredientStatement !== undefined
+    && (existing.ingredient_statement ?? "").trim() !== ingredientStatement;
+  const kindChanged = existing.ingredient_kind !== ingredientKind;
+
+  if (declarationChanged || statementChanged || kindChanged) {
     update.label_review_status = "unreviewed";
     update.label_reviewed_at = null;
   }
