@@ -2,6 +2,7 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type {
+  IngredientComponentRecord,
   IngredientRecord,
   MenuItemRecipeLink,
   RecipeRecord,
@@ -22,7 +23,7 @@ type RecipeRow = {
 export async function getIngredients(): Promise<IngredientRecord[]> {
   const { data, error } = await supabaseAdmin
     .from("ingredients")
-    .select("id, name, measurement_kind, active, notes")
+    .select("id, name, measurement_kind, ingredient_kind, label_name, ingredient_statement, label_review_status, active, notes")
     .order("active", { ascending: false })
     .order("name", { ascending: true });
 
@@ -34,8 +35,36 @@ export async function getIngredients(): Promise<IngredientRecord[]> {
     id: String(row.id),
     name: String(row.name),
     measurementKind: row.measurement_kind as IngredientRecord["measurementKind"],
+    ingredientKind: row.ingredient_kind === "compound" ? "compound" : "simple",
+    labelName: String(row.label_name || row.name),
+    ingredientStatement: String(row.ingredient_statement || row.label_name || row.name),
+    labelReviewStatus: row.label_review_status === "confirmed" ? "confirmed" : "unreviewed",
     active: Boolean(row.active),
     notes: row.notes ? String(row.notes) : null,
+  }));
+}
+
+export async function getIngredientComponents(): Promise<IngredientComponentRecord[]> {
+  const { data, error } = await supabaseAdmin
+    .from("ingredient_components")
+    .select("id, parent_ingredient_id, child_ingredient_id, sort_order, quantity, unit, percentage, source_text")
+    .order("parent_ingredient_id", { ascending: true })
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (error) {
+    throw new Error("Failed to load ingredient components: " + error.message);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    parentIngredientId: String(row.parent_ingredient_id),
+    childIngredientId: String(row.child_ingredient_id),
+    sortOrder: Number(row.sort_order ?? 0),
+    quantity: row.quantity === null ? null : Number(row.quantity),
+    unit: row.unit ? String(row.unit) : null,
+    percentage: row.percentage === null ? null : Number(row.percentage),
+    sourceText: row.source_text ? String(row.source_text) : null,
   }));
 }
 
