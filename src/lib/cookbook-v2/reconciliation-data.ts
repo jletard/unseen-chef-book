@@ -64,11 +64,23 @@ type DraftRow = {
   } | null;
 };
 
-type SourceRow = { source_type: string };
+type SourceRow = {
+  production_item_id: string;
+  source_type: string;
+  source_id: string | null;
+  mapping_state: string;
+};
 
 export async function getReconciliationDashboardV2(): Promise<ReconciliationDashboard> {
-  const [productionResult, taskResult, draftResult, sourceResult, recipeLinkResult] =
-    await Promise.all([
+  const [
+    productionResult,
+    taskResult,
+    draftResult,
+    sourceResult,
+    recipeLinkResult,
+    menuRecipeLinkResult,
+    approvedRecipeResult,
+  ] = await Promise.all([
       supabaseAdmin
         .from("production_items")
         .select("id, name, kind, active")
@@ -84,12 +96,23 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
         .from("recipe_drafts")
         .select("id, recipe_id, draft_state, review_bucket, draft_payload, generation_metadata, source_payload")
         .neq("draft_state", "archived"),
-      supabaseAdmin.from("production_item_sources").select("source_type"),
+      supabaseAdmin
+        .from("production_item_sources")
+        .select("production_item_id, source_type, source_id, mapping_state"),
       supabaseAdmin
         .from("production_item_recipe_links")
         .select("production_item_id")
         .eq("role", "main")
         .eq("active", true),
+      supabaseAdmin
+        .from("menu_item_recipe_links")
+        .select("menu_item_id")
+        .eq("role", "main"),
+      supabaseAdmin
+        .from("recipes")
+        .select("normalized_name")
+        .is("retired_at", null)
+        .not("current_approved_version_id", "is", null),
     ]);
 
   const error =
@@ -97,25 +120,60 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
     taskResult.error ??
     draftResult.error ??
     sourceResult.error ??
-    recipeLinkResult.error;
+    recipeLinkResult.error ??
+    menuRecipeLinkResult.error ??
+    approvedRecipeResult.error;
   if (error) {
     throw new Error(`Unable to load reconciliation workspace: ${error.message}`);
   }
 
   const productionItems = (productionResult.data ?? []) as ProductionItemRow[];
+  const sources = (sourceResult.data ?? []) as SourceRow[];
   const linkedProductionItemIds = new Set(
     (recipeLinkResult.data ?? []).map((row) => String(row.production_item_id)),
   );
-  // Old open missing-recipe tasks can outlive the recipe link they originally
-  // requested. Treat the live active main recipe link as authoritative so a
-  // completed reconciliation does not keep showing up as unfinished work.
+
+  // Older Book screens may have linked the menu item directly rather than
+  // creating a production-item recipe link. Count that as complete too.
+  const directlyLinkedMenuItemIds = new Set(
+    (menuRecipeLinkResult.data ?? []).map((row) => String(row.menu_item_id)),
+  );
+  for (const source of sources) {
+    if (
+      source.source_type === "menu_item" &&
+      source.mapping_state === "confirmed" &&
+      source.source_id &&
+      directlyLinkedMenuItemIds.has(String(source.source_id))
+    ) {
+      linkedProductionItemIds.add(String(source.production_item_id));
+    }
+  }
+
+  // A few reconciled recipes predate both link systems. A unique exact approved
+  // recipe name is enough to keep the reconciliation queue from asking for the
+  // same recipe again; the planning/shopping code can still surface a real
+  // relationship problem if one exists.
+  const approvedRecipeNameCounts = new Map<string, number>();
+  for (const row of approvedRecipeResult.data ?? []) {
+    const name = String(row.normalized_name ?? "").trim();
+    if (!name) continue;
+    approvedRecipeNameCounts.set(name, (approvedRecipeNameCounts.get(name) ?? 0) + 1);
+  }
+  for (const item of productionItems) {
+    const normalizedName = item.name.trim().toLowerCase().replace(/\s+/gu, " ");
+    if ((approvedRecipeNameCounts.get(normalizedName) ?? 0) === 1) {
+      linkedProductionItemIds.add(item.id);
+    }
+  }
+
+  // Old open missing-recipe tasks can outlive the recipe relationship they
+  // originally requested. Live recipe knowledge is authoritative.
   const tasks = ((taskResult.data ?? []) as TaskRow[]).filter(
     (task) =>
       task.task_type !== "missing_recipe" ||
       !linkedProductionItemIds.has(task.subject_id),
   );
   const drafts = (draftResult.data ?? []) as DraftRow[];
-  const sources = (sourceResult.data ?? []) as SourceRow[];
   const productionById = new Map(productionItems.map((item) => [item.id, item]));
   const draftByRecipeId = new Map(
     drafts
