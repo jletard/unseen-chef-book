@@ -1,5 +1,6 @@
 import "server-only";
 
+import { normalizeCookbookName } from "@/lib/cookbook-v2/normalize-name";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export type ReconciliationQueueRow = {
@@ -71,7 +72,85 @@ type SourceRow = {
   mapping_state: string;
 };
 
+type MenuItemSourceRow = {
+  id: string;
+  name: string;
+};
+
+async function ensureMenuItemProductionCoverage() {
+  const [menuResult, sourceResult] = await Promise.all([
+    supabaseAdmin.from("menu_items_v2").select("id, name"),
+    supabaseAdmin
+      .from("production_item_sources")
+      .select("source_id")
+      .eq("source_type", "menu_item")
+      .neq("mapping_state", "rejected"),
+  ]);
+
+  const error = menuResult.error ?? sourceResult.error;
+  if (error) {
+    throw new Error(`Unable to verify menu-item reconciliation coverage: ${error.message}`);
+  }
+
+  const coveredMenuIds = new Set(
+    (sourceResult.data ?? [])
+      .map((row) => row.source_id ? String(row.source_id) : "")
+      .filter(Boolean),
+  );
+
+  for (const menuItem of (menuResult.data ?? []) as MenuItemSourceRow[]) {
+    if (coveredMenuIds.has(menuItem.id)) continue;
+
+    const normalizedName = normalizeCookbookName(menuItem.name);
+    const { data: productionItem, error: productionError } = await supabaseAdmin
+      .from("production_items")
+      .insert({
+        name: menuItem.name,
+        normalized_name: normalizedName,
+        kind: "menu_item",
+        active: true,
+        recipe_requirement: "required",
+      })
+      .select("id")
+      .single();
+
+    if (productionError || !productionItem) {
+      throw new Error(
+        `Could not create production coverage for "${menuItem.name}": ${productionError?.message ?? "unknown error"}`,
+      );
+    }
+
+    const { error: sourceError } = await supabaseAdmin
+      .from("production_item_sources")
+      .insert({
+        production_item_id: productionItem.id,
+        source_type: "menu_item",
+        source_id: menuItem.id,
+        source_name_snapshot: menuItem.name,
+        normalized_source_name: normalizedName,
+        mapping_state: "confirmed",
+      });
+
+    if (sourceError) {
+      // If another request filled the same stable source first, remove the
+      // unused duplicate production item and continue.
+      if (sourceError.code === "23505") {
+        await supabaseAdmin.from("production_items").delete().eq("id", productionItem.id);
+        continue;
+      }
+      throw new Error(
+        `Could not attach production coverage for "${menuItem.name}": ${sourceError.message}`,
+      );
+    }
+  }
+}
+
 export async function getReconciliationDashboardV2(): Promise<ReconciliationDashboard> {
+  // Reconciliation should cover every menu item in the system. Order category
+  // and weekly availability are Admin concerns and must never decide whether a
+  // recipe belongs in Book.
+  await ensureMenuItemProductionCoverage();
+
   const [
     productionResult,
     taskResult,
@@ -160,7 +239,7 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
     approvedRecipeNameCounts.set(name, (approvedRecipeNameCounts.get(name) ?? 0) + 1);
   }
   for (const item of productionItems) {
-    const normalizedName = item.name.trim().toLowerCase().replace(/\s+/gu, " ");
+    const normalizedName = normalizeCookbookName(item.name);
     if ((approvedRecipeNameCounts.get(normalizedName) ?? 0) === 1) {
       linkedProductionItemIds.add(item.id);
     }
@@ -173,6 +252,42 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
       task.task_type !== "missing_recipe" ||
       !linkedProductionItemIds.has(task.subject_id),
   );
+
+  // Do not rely on a historical reconciliation task having been created.
+  // Every menu item without recipe knowledge belongs in the queue, regardless
+  // of category or whether Admin currently offers it for sale.
+  const existingMissingRecipeIds = new Set(
+    tasks
+      .filter((task) => task.task_type === "missing_recipe")
+      .map((task) => task.subject_id),
+  );
+  const menuProductionItemIds = new Set(
+    sources
+      .filter(
+        (source) =>
+          source.source_type === "menu_item" &&
+          source.mapping_state === "confirmed" &&
+          Boolean(source.source_id),
+      )
+      .map((source) => String(source.production_item_id)),
+  );
+
+  for (const productionItemId of menuProductionItemIds) {
+    if (
+      linkedProductionItemIds.has(productionItemId) ||
+      existingMissingRecipeIds.has(productionItemId)
+    ) {
+      continue;
+    }
+    tasks.push({
+      id: `derived-missing-recipe:${productionItemId}`,
+      task_type: "missing_recipe",
+      subject_id: productionItemId,
+      status: "open",
+      priority: 100,
+    });
+  }
+
   const drafts = (draftResult.data ?? []) as DraftRow[];
   const productionById = new Map(productionItems.map((item) => [item.id, item]));
   const draftByRecipeId = new Map(
