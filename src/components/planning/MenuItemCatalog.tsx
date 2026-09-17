@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type {
@@ -38,7 +38,25 @@ export default function MenuItemCatalog({
   const [error, setError] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const recipesById = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+
+  useEffect(() => {
+    const itemId = new URLSearchParams(window.location.search).get("item");
+    if (!itemId) return;
+
+    setFocusedItemId(itemId);
+    const targetId = window.matchMedia("(min-width: 768px)").matches
+      ? `menu-item-desktop-${itemId}`
+      : `menu-item-mobile-${itemId}`;
+
+    window.setTimeout(() => {
+      document.getElementById(targetId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 50);
+  }, []);
 
 
   const sortedItems = useMemo(() => {
@@ -167,7 +185,11 @@ export default function MenuItemCatalog({
             .map((link) => recipesById.get(link.recipeId))
             .filter((recipe): recipe is RecipeRecord => Boolean(recipe));
           return (
-            <article key={item.id} className="border border-zinc-800 bg-black p-4">
+            <article
+              key={item.id}
+              id={`menu-item-mobile-${item.id}`}
+              className={`border bg-black p-4 ${focusedItemId === item.id ? "border-amber-400 ring-1 ring-amber-400" : "border-zinc-800"}`}
+            >
               <h2 className="font-semibold text-zinc-100">{item.shortName || item.name}</h2>
               {item.description && <p className="mt-1 text-sm text-zinc-400">{item.description}</p>}
               <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
@@ -212,7 +234,11 @@ export default function MenuItemCatalog({
                 (link) => link.menuItemId === item.id,
               );
               return (
-                <tr key={item.id} className="border-t border-zinc-800">
+                <tr
+                  key={item.id}
+                  id={`menu-item-desktop-${item.id}`}
+                  className={`border-t ${focusedItemId === item.id ? "border-amber-400 bg-amber-950/20" : "border-zinc-800"}`}
+                >
                   <td className="max-w-md px-3 py-2">
                     <div className="font-medium text-zinc-100">
                       {item.shortName || item.name}
