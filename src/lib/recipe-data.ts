@@ -98,22 +98,76 @@ export async function getRecipes(): Promise<RecipeRecord[]> {
 export async function getMenuItemRecipeLinks(): Promise<
   MenuItemRecipeLink[]
 > {
-  const { data, error } = await supabaseAdmin
-    .from("menu_item_recipe_links")
-    .select("id, menu_item_id, recipe_id, role, sort_order")
-    .order("sort_order", { ascending: true });
+  const [legacyResult, sourceResult, productionLinkResult] = await Promise.all([
+    supabaseAdmin
+      .from("menu_item_recipe_links")
+      .select("id, menu_item_id, recipe_id, role, sort_order")
+      .order("sort_order", { ascending: true }),
+    supabaseAdmin
+      .from("production_item_sources")
+      .select("production_item_id, source_id")
+      .eq("source_type", "menu_item")
+      .eq("mapping_state", "confirmed"),
+    supabaseAdmin
+      .from("production_item_recipe_links")
+      .select("id, production_item_id, recipe_id, role, sort_order")
+      .eq("active", true)
+      .order("sort_order", { ascending: true }),
+  ]);
 
+  const error =
+    legacyResult.error ?? sourceResult.error ?? productionLinkResult.error;
   if (error) {
     throw new Error("Failed to load menu recipe links: " + error.message);
   }
 
-  return (data ?? []).map((row) => ({
-    id: String(row.id),
-    menuItemId: String(row.menu_item_id),
-    recipeId: String(row.recipe_id),
-    role: row.role as MenuItemRecipeLink["role"],
-    sortOrder: Number(row.sort_order ?? 0),
-  }));
+  // Reconciliation writes the canonical production-item recipe relationship.
+  // Menu Items should reflect that automatically rather than requiring the same
+  // recipe to be linked a second time in the older menu_item_recipe_links table.
+  const menuIdsByProductionId = new Map<string, string[]>();
+  for (const source of sourceResult.data ?? []) {
+    if (!source.source_id) continue;
+    const productionItemId = String(source.production_item_id);
+    const menuIds = menuIdsByProductionId.get(productionItemId) ?? [];
+    menuIds.push(String(source.source_id));
+    menuIdsByProductionId.set(productionItemId, menuIds);
+  }
+
+  const merged = new Map<string, MenuItemRecipeLink>();
+
+  for (const row of productionLinkResult.data ?? []) {
+    const menuIds = menuIdsByProductionId.get(String(row.production_item_id)) ?? [];
+    for (const menuItemId of menuIds) {
+      const link: MenuItemRecipeLink = {
+        id: `production:${String(row.id)}:${menuItemId}`,
+        menuItemId,
+        recipeId: String(row.recipe_id),
+        role: row.role as MenuItemRecipeLink["role"],
+        sortOrder: Number(row.sort_order ?? 0),
+      };
+      merged.set(`${menuItemId}|${link.recipeId}|${link.role}`, link);
+    }
+  }
+
+  // Preserve older direct links only where reconciliation has not already
+  // supplied the same relationship.
+  for (const row of legacyResult.data ?? []) {
+    const link: MenuItemRecipeLink = {
+      id: String(row.id),
+      menuItemId: String(row.menu_item_id),
+      recipeId: String(row.recipe_id),
+      role: row.role as MenuItemRecipeLink["role"],
+      sortOrder: Number(row.sort_order ?? 0),
+    };
+    const key = `${link.menuItemId}|${link.recipeId}|${link.role}`;
+    if (!merged.has(key)) merged.set(key, link);
+  }
+
+  return Array.from(merged.values()).sort(
+    (left, right) =>
+      left.menuItemId.localeCompare(right.menuItemId) ||
+      left.sortOrder - right.sortOrder,
+  );
 }
 
 type RecipeItemRow = {
