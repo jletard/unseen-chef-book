@@ -47,6 +47,16 @@ function isPlaceholderStatement(ingredient: LabelIngredient) {
     || statement === normalizeCookbookName(ingredient.labelName);
 }
 
+function compoundStatement(ingredient: LabelIngredient, contents: string) {
+  const labelName = ingredient.labelName || ingredient.name;
+  const trimmedContents = contents.trim();
+  if (!trimmedContents) return labelName;
+  const normalizedContents = normalizeCookbookName(trimmedContents);
+  const normalizedLabelName = normalizeCookbookName(labelName);
+  if (normalizedContents.startsWith(`${normalizedLabelName} (`)) return trimmedContents;
+  return `${labelName} (${trimmedContents})`;
+}
+
 export async function getLabelingWorkspace(): Promise<{
   ingredients: LabelIngredient[];
   recipes: RecipeLabel[];
@@ -137,7 +147,7 @@ export async function getLabelingWorkspace(): Promise<{
     if (children.length === 0) {
       incomplete.add(`${ingredient.name}: compound ingredients not structured`);
       return {
-        statement: ingredient.ingredientStatement || ingredient.labelName || ingredient.name,
+        statement: compoundStatement(ingredient, ingredient.ingredientStatement),
         allergens,
         incomplete,
       };
@@ -154,9 +164,10 @@ export async function getLabelingWorkspace(): Promise<{
       child.incomplete.forEach((value) => incomplete.add(value));
     }
 
-    const statement = isPlaceholderStatement(ingredient)
-      ? `${ingredient.labelName || ingredient.name} (${childStatements.join(", ")})`
+    const contents = isPlaceholderStatement(ingredient)
+      ? childStatements.join(", ")
       : ingredient.ingredientStatement;
+    const statement = compoundStatement(ingredient, contents);
 
     return { statement, allergens, incomplete };
   }
@@ -243,7 +254,7 @@ export async function getLabelingWorkspace(): Promise<{
 
     menuLinkedRecipeIds.add(mainRecipe.recipeId);
     const defaultSides = ((menu.sides ?? []) as string[]).map(String).filter((name: string) => name.trim());
-    const statements = [mainRecipe.ingredientStatement ? `${mainRecipe.name}: ${mainRecipe.ingredientStatement}` : mainRecipe.name];
+    const statements = [mainRecipe.ingredientStatement ? `${mainRecipe.name} (${mainRecipe.ingredientStatement})` : mainRecipe.name];
     const variableSides: string[] = [];
     const sideSelections: NonNullable<RecipeLabel["sideSelections"]> = [];
 
