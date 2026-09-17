@@ -272,6 +272,7 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
       .map((source) => String(source.production_item_id)),
   );
 
+  const missingTaskProductionIds: string[] = [];
   for (const productionItemId of menuProductionItemIds) {
     if (
       linkedProductionItemIds.has(productionItemId) ||
@@ -279,13 +280,59 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
     ) {
       continue;
     }
-    tasks.push({
-      id: `derived-missing-recipe:${productionItemId}`,
+    missingTaskProductionIds.push(productionItemId);
+  }
+
+  // Batch creation is intentionally backed by reconciliation_tasks. If Book
+  // discovers a genuinely missing recipe from live menu coverage, persist that
+  // task here instead of showing a synthetic candidate that the batch RPC will
+  // later reject as "no longer needs a recipe."
+  if (missingTaskProductionIds.length) {
+    const rows = missingTaskProductionIds.map((productionItemId) => ({
       task_type: "missing_recipe",
+      subject_type: "production_item",
       subject_id: productionItemId,
       status: "open",
       priority: 100,
-    });
+      candidate_payload: {},
+    }));
+    const { data: insertedTasks, error: insertTaskError } = await supabaseAdmin
+      .from("reconciliation_tasks")
+      .insert(rows)
+      .select("id, task_type, subject_id, status, priority");
+
+    if (insertTaskError && insertTaskError.code !== "23505") {
+      throw new Error(
+        `Unable to create missing-recipe reconciliation tasks: ${insertTaskError.message}`,
+      );
+    }
+
+    for (const task of (insertedTasks ?? []) as TaskRow[]) {
+      tasks.push(task);
+      existingMissingRecipeIds.add(task.subject_id);
+    }
+
+    // If another request inserted the task first, load the winners so this
+    // request still renders the same authoritative queue.
+    const stillMissing = missingTaskProductionIds.filter(
+      (productionItemId) => !existingMissingRecipeIds.has(productionItemId),
+    );
+    if (stillMissing.length) {
+      const { data: persistedTasks, error: persistedTaskError } = await supabaseAdmin
+        .from("reconciliation_tasks")
+        .select("id, task_type, subject_id, status, priority")
+        .eq("task_type", "missing_recipe")
+        .eq("subject_type", "production_item")
+        .in("subject_id", stillMissing)
+        .in("status", ["open", "deferred"]);
+
+      if (persistedTaskError) {
+        throw new Error(
+          `Unable to reload missing-recipe reconciliation tasks: ${persistedTaskError.message}`,
+        );
+      }
+      tasks.push(...((persistedTasks ?? []) as TaskRow[]));
+    }
   }
 
   const drafts = (draftResult.data ?? []) as DraftRow[];
