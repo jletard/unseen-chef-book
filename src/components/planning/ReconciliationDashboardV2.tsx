@@ -268,6 +268,33 @@ export default function ReconciliationDashboardV2({
     setMessage(`Resumed ${requests.length} recipes in ${packets.length} Secret AI+ ${packets.length === 1 ? "packet" : "packets"}.`);
   }
 
+  const unfinishedBatches = batches.filter((batch) =>
+    batch.jobs.some((job) => ["queued", "failed", "needs_input", "processing", "running", "leased"].includes(job.status)),
+  );
+  const completedBatchCount = batches.length - unfinishedBatches.length;
+
+  async function clearCompletedBatches() {
+    if (!completedBatchCount) return;
+    if (!confirm(`Clear ${completedBatchCount} completed reconciliation batch${completedBatchCount === 1 ? "" : "es"}?\n\nRecipes and finalized cookbook data will remain.`)) {
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/reconciliation/batches", { method: "DELETE" });
+      const result = (await response.json()) as { removedCount?: number; error?: string };
+      if (!response.ok) {
+        throw new Error(result.error ?? "Completed batches could not be cleared.");
+      }
+      await loadBatches();
+      setMessage(`Cleared ${result.removedCount ?? 0} completed batch${result.removedCount === 1 ? "" : "es"}. Recipes were not changed.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Completed batches could not be cleared.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <h1 className="text-2xl font-bold">Production Reconciliation</h1>
@@ -308,35 +335,52 @@ export default function ReconciliationDashboardV2({
           </button>
         </div>
         {message && <p className="mt-3 text-sm text-amber-300">{message}</p>}
-        <div className="mt-4 flex items-center justify-between gap-3 border-t border-zinc-800 pt-3">
-          <h2 className="font-medium">Recent batches</h2>
-          <button
-            type="button"
-            onClick={() => loadBatches().catch((error) => setMessage(error.message))}
-            className="border border-zinc-700 px-3 py-1 text-sm"
-          >
-            Refresh status
-          </button>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-3">
+          <div>
+            <h2 className="font-medium">Unfinished batches</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              This area only exists so an interrupted Secret AI+ batch can be resumed.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {completedBatchCount > 0 && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={clearCompletedBatches}
+                className="border border-red-900 px-3 py-1 text-sm text-red-300 disabled:opacity-40"
+              >
+                Clear completed ({completedBatchCount})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => loadBatches().catch((error) => setMessage(error.message))}
+              className="border border-zinc-700 px-3 py-1 text-sm"
+            >
+              Refresh status
+            </button>
+          </div>
         </div>
-        {batches.length > 0 && (
+
+        {unfinishedBatches.length === 0 ? (
+          <p className="mt-3 text-sm text-zinc-500">
+            No unfinished batches{completedBatchCount ? ` · ${completedBatchCount} completed hidden` : ""}.
+          </p>
+        ) : (
           <div className="mt-3 grid gap-2 md:grid-cols-2">
-            {batches.map((batch) => (
+            {unfinishedBatches.map((batch) => (
               <div key={batch.id} className="border border-zinc-800 p-3 text-sm">
                 <div className="flex items-start justify-between gap-3">
                   <span className="font-medium">{batch.name}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="capitalize text-blue-300">{batch.status.replaceAll("_", " ")}</span>
-                    {!batch.jobs.some((job) => ["queued", "processing", "running", "leased"].includes(job.status)) && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => removeBatch(batch)}
-                        className="border border-red-900 px-2 py-0.5 text-xs text-red-300 disabled:opacity-40"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => removeBatch(batch)}
+                    className="border border-red-900 px-2 py-0.5 text-xs text-red-300 disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
                 </div>
                 <div className="mt-2 text-zinc-400">
                   {batch.requestedCount} jobs · {batch.counts.ready ?? 0} ready · {batch.counts.failed ?? 0} failed · {batch.counts.queued ?? 0} queued
