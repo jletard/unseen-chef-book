@@ -19,6 +19,7 @@ export const navigationSections: NavigationSection[] = [
       { label: "Components", href: "/planning/components" },
       { label: "Sides", href: "/planning/sides" },
       { label: "Ingredients", href: "/planning/ingredients" },
+      { label: "Nutrition", href: "/planning/nutrition" },
       { label: "Allergens", href: "/planning/allergens" },
       { label: "Categories", href: "/planning/categories" },
       { label: "Protein Types", href: "/planning/protein-types" },
