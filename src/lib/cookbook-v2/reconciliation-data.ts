@@ -67,7 +67,7 @@ type DraftRow = {
 type SourceRow = { source_type: string };
 
 export async function getReconciliationDashboardV2(): Promise<ReconciliationDashboard> {
-  const [productionResult, taskResult, draftResult, sourceResult] =
+  const [productionResult, taskResult, draftResult, sourceResult, recipeLinkResult] =
     await Promise.all([
       supabaseAdmin
         .from("production_items")
@@ -85,19 +85,35 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
         .select("id, recipe_id, draft_state, review_bucket, draft_payload, generation_metadata, source_payload")
         .neq("draft_state", "archived"),
       supabaseAdmin.from("production_item_sources").select("source_type"),
+      supabaseAdmin
+        .from("production_item_recipe_links")
+        .select("production_item_id")
+        .eq("role", "main")
+        .eq("active", true),
     ]);
 
   const error =
     productionResult.error ??
     taskResult.error ??
     draftResult.error ??
-    sourceResult.error;
+    sourceResult.error ??
+    recipeLinkResult.error;
   if (error) {
     throw new Error(`Unable to load reconciliation workspace: ${error.message}`);
   }
 
   const productionItems = (productionResult.data ?? []) as ProductionItemRow[];
-  const tasks = (taskResult.data ?? []) as TaskRow[];
+  const linkedProductionItemIds = new Set(
+    (recipeLinkResult.data ?? []).map((row) => String(row.production_item_id)),
+  );
+  // Old open missing-recipe tasks can outlive the recipe link they originally
+  // requested. Treat the live active main recipe link as authoritative so a
+  // completed reconciliation does not keep showing up as unfinished work.
+  const tasks = ((taskResult.data ?? []) as TaskRow[]).filter(
+    (task) =>
+      task.task_type !== "missing_recipe" ||
+      !linkedProductionItemIds.has(task.subject_id),
+  );
   const drafts = (draftResult.data ?? []) as DraftRow[];
   const sources = (sourceResult.data ?? []) as SourceRow[];
   const productionById = new Map(productionItems.map((item) => [item.id, item]));
