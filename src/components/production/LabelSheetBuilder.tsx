@@ -121,10 +121,10 @@ export default function LabelSheetBuilder({ recipes }: { recipes: RecipeLabel[] 
   function addToSheet() {
     if (!recipe || !currentLabelValid) return;
     const variableStatements = selectedSides.filter((side) => side.variable).map(
-      (side) => `${side.label}: ${variableSideIngredients[side.id].trim()}`,
+      (side) => `${side.label} (${variableSideIngredients[side.id].trim()})`,
     );
     const selectedStatements = selectedSideRecipeRecords.map((side) =>
-      side.ingredientStatement ? `${side.name}: ${side.ingredientStatement}` : side.name,
+      side.ingredientStatement ? `${side.name} (${side.ingredientStatement})` : side.name,
     );
     const selectedAllergens = new Set(recipe.allergens);
     selectedSideRecipeRecords.forEach((side) => side.allergens.forEach((allergen) => selectedAllergens.add(allergen)));
