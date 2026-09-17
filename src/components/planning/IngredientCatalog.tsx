@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type {
@@ -112,6 +112,25 @@ export default function IngredientCatalog({
     setNewChildSourceText("");
     setError("");
   }
+
+  useEffect(() => {
+    const itemId = new URLSearchParams(window.location.search).get("item");
+    if (!itemId) return;
+    const ingredient = ingredients.find((candidate) => candidate.id === itemId);
+    if (!ingredient) return;
+
+    setQuery("");
+    setFilter("all");
+    beginEdit(ingredient);
+    window.setTimeout(() => {
+      document.getElementById(`ingredient-${itemId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 50);
+    // The deep link is intentionally handled once on page load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function saveIngredient() {
     if (!editingId || !editName.trim()) return;
@@ -274,7 +293,7 @@ export default function IngredientCatalog({
           const availableChildren = ingredients.filter((candidate) => candidate.id !== ingredient.id && !existingChildIds.has(candidate.id));
 
           return (
-            <section key={ingredient.id} className="border border-blue-900 bg-zinc-950 p-4">
+            <section id={`ingredient-${ingredient.id}`} key={ingredient.id} className="border border-blue-900 bg-zinc-950 p-4">
               <div className="grid gap-3 md:grid-cols-[minmax(12rem,1fr)_10rem_10rem_auto_auto]">
                 <input value={editName} onChange={(event) => setEditName(event.target.value)} className="min-w-0 border border-zinc-600 bg-black px-3 py-2" />
                 <select value={editMeasurementKind} onChange={(event) => setEditMeasurementKind(event.target.value as IngredientRecord["measurementKind"])} className="border border-zinc-600 bg-black px-2 py-2">
