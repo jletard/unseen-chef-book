@@ -67,7 +67,6 @@ export default function ReconciliationDashboardV2({
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [kindFilter, setKindFilter] = useState("all");
-  const [activityFilter, setActivityFilter] = useState<"active" | "all">("active");
   const [search, setSearch] = useState("");
   const [batchName, setBatchName] = useState("Production reconciliation batch");
   const [busy, setBusy] = useState(false);
@@ -90,11 +89,10 @@ export default function ReconciliationDashboardV2({
   const visibleQueue = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
     return dashboard.queue.filter((row) => {
-      if (activityFilter === "active" && !row.active) return false;
       if (kindFilter !== "all" && row.kind !== kindFilter) return false;
       return !normalizedSearch || row.name.toLocaleLowerCase().includes(normalizedSearch);
     });
-  }, [activityFilter, dashboard.queue, kindFilter, search]);
+  }, [dashboard.queue, kindFilter, search]);
 
   useEffect(() => {
     void loadBatches().catch((error) => {
@@ -228,6 +226,29 @@ export default function ReconciliationDashboardV2({
     setBatches(result.batches ?? []);
   }
 
+  async function removeBatch(batch: BatchStatus) {
+    if (!confirm(`Remove this completed reconciliation batch?\n\n${batch.requestedCount} jobs · ${batch.name}\n\nRecipes and finalized cookbook data will remain.`)) {
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/reconciliation/batches/${batch.id}`, {
+        method: "DELETE",
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error ?? "Batch could not be removed.");
+      }
+      setBatches((current) => current.filter((candidate) => candidate.id !== batch.id));
+      setMessage("Batch removed. Finalized recipes were not changed.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Batch could not be removed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function resumeBatch(batch: BatchStatus) {
     const requests = batch.jobs
       .filter((job) => ["queued", "failed", "needs_input"].includes(job.status))
@@ -301,9 +322,21 @@ export default function ReconciliationDashboardV2({
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {batches.map((batch) => (
               <div key={batch.id} className="border border-zinc-800 p-3 text-sm">
-                <div className="flex justify-between gap-3">
+                <div className="flex items-start justify-between gap-3">
                   <span className="font-medium">{batch.name}</span>
-                  <span className="capitalize text-blue-300">{batch.status.replaceAll("_", " ")}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="capitalize text-blue-300">{batch.status.replaceAll("_", " ")}</span>
+                    {!batch.jobs.some((job) => ["queued", "processing", "running", "leased"].includes(job.status)) && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => removeBatch(batch)}
+                        className="border border-red-900 px-2 py-0.5 text-xs text-red-300 disabled:opacity-40"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="mt-2 text-zinc-400">
                   {batch.requestedCount} jobs · {batch.counts.ready ?? 0} ready · {batch.counts.failed ?? 0} failed · {batch.counts.queued ?? 0} queued
@@ -403,14 +436,6 @@ export default function ReconciliationDashboardV2({
               </option>
             ))}
           </select>
-          <select
-            value={activityFilter}
-            onChange={(event) => setActivityFilter(event.target.value as "active" | "all")}
-            className="border border-zinc-700 bg-black px-3 py-2 text-sm"
-          >
-            <option value="active">Active only</option>
-            <option value="all">Active and inactive</option>
-          </select>
           <button type="button" onClick={selectVisible} className="border border-zinc-600 px-3 py-2 text-sm">
             Select visible
           </button>
@@ -440,9 +465,6 @@ export default function ReconciliationDashboardV2({
                 <span className="block font-medium">{row.name}</span>
                 <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
                   <span className="text-zinc-400">{kindLabels[row.kind] ?? row.kind}</span>
-                  <span className={row.active ? "text-emerald-400" : "text-zinc-500"}>
-                    {row.active ? "Active" : "Inactive"}
-                  </span>
                   <span className="text-amber-300">Needs recipe</span>
                 </span>
               </span>
@@ -457,7 +479,6 @@ export default function ReconciliationDashboardV2({
                 <th className="w-12 px-4 py-3">Pick</th>
                 <th className="px-4 py-3">Production item</th>
                 <th className="px-4 py-3">Kind</th>
-                <th className="px-4 py-3">State</th>
                 <th className="px-4 py-3">Reconciliation</th>
               </tr>
             </thead>
@@ -475,11 +496,6 @@ export default function ReconciliationDashboardV2({
                   </td>
                   <td className="px-4 py-3 font-medium">{row.name}</td>
                   <td className="px-4 py-3 text-zinc-300">{kindLabels[row.kind] ?? row.kind}</td>
-                  <td className="px-4 py-3">
-                    <span className={row.active ? "text-emerald-400" : "text-zinc-500"}>
-                      {row.active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
                   <td className="px-4 py-3 text-amber-300">Needs recipe</td>
                 </tr>
               ))}
