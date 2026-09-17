@@ -68,7 +68,6 @@ export default function ReconciliationDashboardV2({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [kindFilter, setKindFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [batchName, setBatchName] = useState("Production reconciliation batch");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [batches, setBatches] = useState<BatchStatus[]>([]);
@@ -147,7 +146,7 @@ export default function ReconciliationDashboardV2({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: batchName,
+          name: "Production reconciliation batch",
           productionItemIds: Array.from(selectedIds),
           requestKey: crypto.randomUUID(),
         }),
@@ -171,7 +170,7 @@ export default function ReconciliationDashboardV2({
       );
       setActiveBatch({
         id: result.batchId ?? "",
-        name: batchName,
+        name: "Production reconciliation batch",
         packets,
         completedPackets: new Set(),
       });
@@ -314,28 +313,10 @@ export default function ReconciliationDashboardV2({
         />
       </div>
 
-      <section className="mt-8 border border-zinc-800 bg-zinc-950 p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="min-w-64 flex-1 text-sm">
-            <span className="mb-1 block text-zinc-400">Batch name</span>
-            <input
-              value={batchName}
-              onChange={(event) => setBatchName(event.target.value)}
-              maxLength={120}
-              className="w-full border border-zinc-700 bg-black px-3 py-2"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={createBatch}
-            disabled={busy || selectedIds.size === 0 || !batchName.trim()}
-            className="border border-blue-500 px-4 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {busy ? "Creating batch…" : `Create batch (${selectedIds.size})`}
-          </button>
-        </div>
-        {message && <p className="mt-3 text-sm text-amber-300">{message}</p>}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-3">
+      {message && <p className="mt-6 text-sm text-amber-300">{message}</p>}
+
+      <section className="mt-6 border border-zinc-800 bg-zinc-950 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-medium">Unfinished batches</h2>
             <p className="mt-1 text-xs text-zinc-500">
@@ -492,6 +473,14 @@ export default function ReconciliationDashboardV2({
             className="border border-zinc-700 px-3 py-2 text-sm text-zinc-300"
           >
             Clear
+          </button>
+          <button
+            type="button"
+            onClick={createBatch}
+            disabled={busy || selectedIds.size === 0}
+            className="border border-blue-500 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy ? "Creating batch…" : `Create batch (${selectedIds.size})`}
           </button>
         </div>
 
