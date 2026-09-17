@@ -11,6 +11,8 @@ type CreateBatchBody = {
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const activeJobStatuses = new Set(["queued", "processing", "running", "leased"]);
+
 type BatchRow = {
   id: string;
   name: string;
@@ -168,4 +170,70 @@ export async function POST(request: Request) {
     },
     { status: result.already_existed ? 200 : 201 },
   );
+}
+
+
+export async function DELETE() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  const { data: batches, error: batchError } = await supabase
+    .from("recipe_intake_batches")
+    .select("id, recipe_intake_jobs(id, status)");
+
+  if (batchError) {
+    const forbidden = batchError.code === "42501";
+    return NextResponse.json(
+      { error: forbidden ? "Cookbook editor access is required." : batchError.message },
+      { status: forbidden ? 403 : 400 },
+    );
+  }
+
+  const removableIds = (batches ?? [])
+    .filter((batch) => {
+      const jobs = Array.isArray(batch.recipe_intake_jobs)
+        ? batch.recipe_intake_jobs
+        : [];
+      return !jobs.some((job) => activeJobStatuses.has(String(job.status)));
+    })
+    .map((batch) => String(batch.id));
+
+  if (!removableIds.length) {
+    return NextResponse.json({ removedCount: 0 });
+  }
+
+  const { error: jobsError } = await supabase
+    .from("recipe_intake_jobs")
+    .delete()
+    .in("batch_id", removableIds);
+
+  if (jobsError) {
+    const forbidden = jobsError.code === "42501";
+    return NextResponse.json(
+      { error: forbidden ? "Cookbook editor access is required." : jobsError.message },
+      { status: forbidden ? 403 : 400 },
+    );
+  }
+
+  const { data: removed, error: removeError } = await supabase
+    .from("recipe_intake_batches")
+    .delete()
+    .in("id", removableIds)
+    .select("id");
+
+  if (removeError) {
+    const forbidden = removeError.code === "42501";
+    return NextResponse.json(
+      { error: forbidden ? "Cookbook editor access is required." : removeError.message },
+      { status: forbidden ? 403 : 400 },
+    );
+  }
+
+  return NextResponse.json({ removedCount: removed?.length ?? 0 });
 }
