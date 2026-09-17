@@ -90,6 +90,13 @@ function compoundStatement(ingredient: LabelIngredient, contents: string) {
   return `${labelName} (${trimmedContents})`;
 }
 
+function purchasedIngredientStatement(ingredient: LabelIngredient) {
+  if (isPlaceholderStatement(ingredient)) {
+    return ingredient.labelName || ingredient.name;
+  }
+  return compoundStatement(ingredient, ingredient.ingredientStatement);
+}
+
 function directMassToGrams(quantity: number, unit: string) {
   const factor = massUnitToGrams[unit];
   return factor ? quantity * factor : null;
@@ -205,7 +212,7 @@ export async function getLabelingWorkspace(): Promise<{
 
     if (ingredient.ingredientKind !== "compound") {
       return {
-        statement: ingredient.ingredientStatement || ingredient.labelName || ingredient.name,
+        statement: purchasedIngredientStatement(ingredient),
         allergens,
         incomplete,
       };
@@ -215,7 +222,7 @@ export async function getLabelingWorkspace(): Promise<{
     if (children.length === 0) {
       incomplete.add(`${ingredient.name}: compound ingredients not structured`);
       return {
-        statement: compoundStatement(ingredient, ingredient.ingredientStatement),
+        statement: purchasedIngredientStatement(ingredient),
         allergens,
         incomplete,
       };
