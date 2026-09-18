@@ -18,6 +18,7 @@ declare
   canonical_before text;
   changed_recipe_names text[];
   trigger_rec record;
+  trigger_name text;
   disabled_triggers text[] := '{}'::text[];
 begin
   select array_agg(distinct x)
@@ -107,19 +108,19 @@ begin
       set ingredient_id = canonical_ingredient_id
     where ingredient_id = any(dup_ids);
   exception when others then
-    foreach canonical_before in array disabled_triggers loop
+    foreach trigger_name in array disabled_triggers loop
       execute format(
         'alter table public.recipe_version_items enable trigger %I',
-        canonical_before
+        trigger_name
       );
     end loop;
     raise;
   end;
 
-  foreach canonical_before in array disabled_triggers loop
+  foreach trigger_name in array disabled_triggers loop
     execute format(
       'alter table public.recipe_version_items enable trigger %I',
-      canonical_before
+      trigger_name
     );
   end loop;
 
