@@ -29,6 +29,7 @@ export type IngredientRecord = {
   ingredientStatement: string;
   labelReviewStatus: "unreviewed" | "confirmed";
   active: boolean;
+  excludeFromShopping: boolean;
   notes: string | null;
 };
 
