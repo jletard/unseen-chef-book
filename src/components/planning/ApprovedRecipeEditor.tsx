@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import SecretAIImportBox from "@/components/SecretAIImportBox/SecretAIImportBox";
+import { createSingleRecipeDraftSchema } from "@/lib/cookbook-v2/secret-ai-batch";
 import type { ApprovedRecipeEditorData } from "@/lib/recipe-data";
 
 const yieldUnits: Record<string, string[]> = {
@@ -36,6 +38,85 @@ export default function ApprovedRecipeEditor({ data }: { data: ApprovedRecipeEdi
       items[index] = next;
       return { ...current, items };
     });
+  }
+
+  async function acceptAIRevision(values: Record<string, unknown>) {
+    const imported = values as {
+      draft?: {
+        name?: string;
+        recipeCategory?: string;
+        yieldKind?: string;
+        baseYield?: number;
+        yieldUnit?: string;
+        minimumBatchQuantity?: number;
+        minimumBatchUnit?: string;
+        portionQuantity?: number;
+        portionUnit?: string;
+        chefNotes?: string;
+        items?: Array<{
+          id?: string;
+          kind?: "ingredient" | "recipe";
+          proposedName?: string;
+          quantity?: number;
+          unit?: string;
+          preparationNote?: string;
+        }>;
+        steps?: Array<{ id?: string; instruction?: string }>;
+      };
+    };
+    const next = imported.draft;
+    if (!next) throw new Error("AI+ did not return a recipe draft.");
+
+    const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+    const currentById = new Map(draft.items.map((item) => [item.id, item]));
+
+    const items = (next.items ?? []).map((item, index) => {
+      const kind = item.kind === "recipe" ? "recipe" : "ingredient";
+      const name = String(item.proposedName ?? "").trim();
+      const options = kind === "ingredient" ? draft.ingredientOptions : draft.componentOptions;
+      const matched = options.find((option) => normalizeName(option.name) === normalizeName(name));
+      const current = item.id ? currentById.get(item.id) : undefined;
+      const unchangedCurrent =
+        current &&
+        current.kind === kind &&
+        normalizeName(current.name) === normalizeName(name)
+          ? current
+          : undefined;
+      const sourceId = matched?.id ?? unchangedCurrent?.sourceId ?? "";
+      if (!sourceId) {
+        throw new Error(`"${name || `item ${index + 1}`}" is not an existing ${kind === "ingredient" ? "ingredient" : "approved component"} in Book yet.`);
+      }
+      return {
+        id: item.id || crypto.randomUUID(),
+        kind,
+        sourceId,
+        name: matched?.name ?? unchangedCurrent?.name ?? name,
+        quantity: Number(item.quantity ?? 0),
+        unit: String(item.unit ?? "g"),
+        preparationNote: String(item.preparationNote ?? ""),
+      };
+    });
+
+    setDraft((current) => ({
+      ...current,
+      name: String(next.name ?? current.name),
+      recipeType: String(next.recipeCategory ?? current.recipeType),
+      yieldKind: String(next.yieldKind ?? current.yieldKind),
+      baseYield: Number(next.baseYield ?? current.baseYield),
+      yieldUnit: String(next.yieldUnit ?? current.yieldUnit),
+      minimumBatchQuantity: Number(next.minimumBatchQuantity ?? current.minimumBatchQuantity),
+      minimumBatchUnit: String(next.minimumBatchUnit ?? current.minimumBatchUnit),
+      portionQuantity: next.portionQuantity == null ? null : Number(next.portionQuantity),
+      portionUnit: next.portionUnit ? String(next.portionUnit) : null,
+      chefNotes: String(next.chefNotes ?? current.chefNotes),
+      items,
+      steps: (next.steps ?? []).map((step) => ({
+        id: step.id || crypto.randomUUID(),
+        instruction: String(step.instruction ?? ""),
+      })),
+    }));
+    setMessage("AI+ revision loaded into the editor. Review it, then save the new approved version.");
+    setError("");
   }
 
   async function save() {
@@ -84,9 +165,46 @@ export default function ApprovedRecipeEditor({ data }: { data: ApprovedRecipeEdi
       {error && <p className="border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</p>}
 
       <section className="border border-zinc-700 bg-zinc-950 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <h2 className="text-lg font-semibold">Recipe definition</h2>
-          <span className="text-emerald-400">Approved</span>
+          <div className="ml-auto flex max-w-full flex-wrap items-start justify-end gap-3">
+            <span className="pt-1 text-emerald-400">Approved</span>
+            <SecretAIImportBox
+              formSchema={createSingleRecipeDraftSchema(draft.name)}
+              currentValues={{
+                draft: {
+                  name: draft.name,
+                  recipeCategory: draft.recipeType,
+                  yieldKind: draft.yieldKind,
+                  baseYield: draft.baseYield,
+                  yieldUnit: draft.yieldUnit,
+                  minimumBatchQuantity: draft.minimumBatchQuantity,
+                  minimumBatchUnit: draft.minimumBatchUnit,
+                  portionQuantity: draft.portionQuantity ?? undefined,
+                  portionUnit: draft.portionUnit ?? undefined,
+                  chefNotes: draft.chefNotes,
+                  equipment: [],
+                  items: draft.items.map((item) => ({
+                    id: item.id,
+                    kind: item.kind,
+                    proposedName: item.name,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    preparationNote: item.preparationNote,
+                  })),
+                  steps: draft.steps.map((step) => ({
+                    id: step.id,
+                    instruction: step.instruction,
+                  })),
+                },
+                inlineComponents: [],
+              }}
+              onImport={acceptAIRevision}
+              successMessage="AI+ revision loaded into the editor."
+              closeAfterImport
+              disabled={busy}
+            />
+          </div>
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
