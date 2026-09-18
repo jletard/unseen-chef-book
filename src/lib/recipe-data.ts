@@ -23,7 +23,7 @@ type RecipeRow = {
 export async function getIngredients(): Promise<IngredientRecord[]> {
   const { data, error } = await supabaseAdmin
     .from("ingredients")
-    .select("id, name, measurement_kind, ingredient_kind, label_name, ingredient_statement, label_review_status, active, notes")
+    .select("id, name, measurement_kind, ingredient_kind, label_name, ingredient_statement, label_review_status, active, exclude_from_shopping, notes")
     .order("active", { ascending: false })
     .order("name", { ascending: true });
 
@@ -40,6 +40,7 @@ export async function getIngredients(): Promise<IngredientRecord[]> {
     ingredientStatement: String(row.ingredient_statement || row.label_name || row.name),
     labelReviewStatus: row.label_review_status === "confirmed" ? "confirmed" : "unreviewed",
     active: Boolean(row.active),
+    excludeFromShopping: Boolean(row.exclude_from_shopping),
     notes: row.notes ? String(row.notes) : null,
   }));
 }
