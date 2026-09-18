@@ -366,6 +366,28 @@ export async function POST() {
         ready_draft_ids: [draft.id],
       });
       if (error) {
+        if (
+          error.message.includes("ingredients_name_unique") ||
+          error.message.includes("duplicate key value")
+        ) {
+          const unresolvedIngredientNames = recipeItems(draft)
+            .filter(
+              (item) =>
+                item.kind === "ingredient" &&
+                typeof item.ingredientId !== "string" &&
+                typeof item.proposedName === "string" &&
+                item.proposedName.trim(),
+            )
+            .map((item) => String(item.proposedName).trim());
+
+          const clue = unresolvedIngredientNames.length
+            ? ` Likely ingredient conflict: ${unresolvedIngredientNames.join(" · ")}.`
+            : "";
+
+          throw new Error(
+            `Finalization failed for "${draftName}": an ingredient name already exists in Book but this draft is trying to create it again.${clue}`,
+          );
+        }
         throw new Error(`Finalization failed for "${draftName}": ${error.message}`);
       }
       if (Array.isArray(data)) finalized.push(...data);
