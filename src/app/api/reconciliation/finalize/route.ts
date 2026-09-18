@@ -16,6 +16,64 @@ function recipeItems(draft: DraftRow) {
     : [];
 }
 
+
+async function bindUniqueApprovedComponents(drafts: DraftRow[]) {
+  const { data: recipes, error: recipeError } = await supabaseAdmin
+    .from("recipes")
+    .select("id, name, normalized_name, current_approved_version_id")
+    .is("retired_at", null)
+    .not("current_approved_version_id", "is", null);
+  if (recipeError) throw new Error(recipeError.message);
+
+  const byName = new Map<string, Array<{ id: string; name: string; versionId: string }>>();
+  for (const row of recipes ?? []) {
+    if (!row.current_approved_version_id) continue;
+    const key = normalizeCookbookName(row.name);
+    const matches = byName.get(key) ?? [];
+    matches.push({
+      id: row.id,
+      name: row.name,
+      versionId: row.current_approved_version_id,
+    });
+    byName.set(key, matches);
+  }
+
+  for (const draft of drafts) {
+    let changed = false;
+    const nextItems = recipeItems(draft).map((item) => {
+      if (item.kind !== "recipe") return item;
+      const existingVersionId =
+        typeof item.recipeVersionId === "string" ? item.recipeVersionId : "";
+      if (existingVersionId) return item;
+
+      const proposedName =
+        typeof item.proposedName === "string" ? item.proposedName.trim() : "";
+      if (!proposedName) return item;
+      const matches = byName.get(normalizeCookbookName(proposedName)) ?? [];
+      if (matches.length !== 1) return item;
+
+      changed = true;
+      const match = matches[0];
+      return {
+        ...item,
+        proposedName: match.name,
+        recipeId: match.id,
+        recipeVersionId: match.versionId,
+      };
+    });
+
+    if (!changed) continue;
+
+    const nextPayload = { ...draft.draft_payload, items: nextItems };
+    const { error } = await supabaseAdmin
+      .from("recipe_drafts")
+      .update({ draft_payload: nextPayload, updated_at: new Date().toISOString() })
+      .eq("id", draft.id);
+    if (error) throw new Error(error.message);
+    draft.draft_payload = nextPayload;
+  }
+}
+
 async function loadFinalizationPreview() {
   const [draftResult, ingredientResult, aliasResult, recipeResult] = await Promise.all([
     supabaseAdmin
@@ -173,6 +231,12 @@ export async function POST() {
         { status: 409 },
       );
     }
+
+    // Preview already treats a uniquely named approved recipe as a resolved
+    // component. Persist that exact recipe/version onto the draft before the
+    // finalization RPC so the RPC sees the same resolved relationship.
+    await bindUniqueApprovedComponents(drafts);
+
     const orderedDrafts = dependencyOrder(drafts);
     const finalized: unknown[] = [];
 
