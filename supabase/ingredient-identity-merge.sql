@@ -98,6 +98,15 @@ begin
     and nutrition_reference_ingredient_id = any(dup_ids);
 
   -- Ingredient composition relationships also use ingredient identities.
+  -- Remove rows that would become a forbidden self-reference before repointing.
+  delete from public.ingredient_components
+  where parent_ingredient_id = canonical_ingredient_id
+    and child_ingredient_id = any(dup_ids);
+
+  delete from public.ingredient_components
+  where parent_ingredient_id = any(dup_ids)
+    and child_ingredient_id = canonical_ingredient_id;
+
   -- Collapse relationships that would become duplicates before repointing them.
   delete from public.ingredient_components ic
   where ic.child_ingredient_id = any(dup_ids)
@@ -125,6 +134,7 @@ begin
     set parent_ingredient_id = canonical_ingredient_id
   where parent_ingredient_id = any(dup_ids);
 
+  -- Safety cleanup in case an existing unusual relationship survived.
   delete from public.ingredient_components
   where parent_ingredient_id = canonical_ingredient_id
     and child_ingredient_id = canonical_ingredient_id;
