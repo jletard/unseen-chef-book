@@ -137,7 +137,7 @@ export default function ApprovedRecipeEditor({ data }: { data: ApprovedRecipeEdi
             </label>
           </div>
 
-          <div className="rounded border border-amber-900/70 bg-amber-950/10 p-3 md:col-span-2 xl:col-span-2">
+          <div id="production-portion" className="scroll-mt-6 rounded border border-amber-900/70 bg-amber-950/10 p-3 md:col-span-2 xl:col-span-2">
             <div className="text-sm font-semibold text-amber-300">Production portion</div>
             <div className="mt-2 grid grid-cols-[1fr_1fr] gap-2">
               <label className="text-sm">
