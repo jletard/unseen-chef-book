@@ -65,27 +65,49 @@ async function bindUniqueExistingIngredients(drafts: DraftRow[]) {
     let changed = false;
     const nextItems: Array<Record<string, unknown>> = recipeItems(draft).map(
       (item): Record<string, unknown> => {
-      if (item.kind !== "ingredient") return item;
-      const existingIngredientId =
-        typeof item.ingredientId === "string" ? item.ingredientId : "";
-      if (existingIngredientId) return item;
+        if (item.kind !== "ingredient") return item;
 
-      const proposedName =
-        typeof item.proposedName === "string" ? item.proposedName.trim() : "";
-      if (!proposedName) return item;
+        const proposedName =
+          typeof item.proposedName === "string" ? item.proposedName.trim() : "";
+        if (!proposedName) return item;
 
-      const matches = Array.from(
-        (byName.get(normalizeCookbookName(proposedName)) ?? new Map()).values(),
-      );
-      if (matches.length !== 1) return item;
+        const currentIngredientId =
+          typeof item.ingredientId === "string" ? item.ingredientId : "";
+        const currentIngredient = currentIngredientId
+          ? ingredientById.get(currentIngredientId)
+          : undefined;
 
-      changed = true;
-      const match = matches[0];
-      return {
-        ...item,
-        proposedName: match.name,
-        ingredientId: match.id,
-      };
+        // Do not trust a stale/missing draft-owned ingredientId. Resolve the
+        // canonical identity from the actual proposed name whenever possible.
+        const matches = Array.from(
+          (byName.get(normalizeCookbookName(proposedName)) ?? new Map()).values(),
+        );
+
+        if (matches.length === 1) {
+          const match = matches[0];
+          if (
+            currentIngredientId !== match.id ||
+            proposedName !== match.name
+          ) {
+            changed = true;
+          }
+          return {
+            ...item,
+            proposedName: match.name,
+            ingredientId: match.id,
+          };
+        }
+
+        // If the draft points at an ingredient that no longer exists, remove
+        // the stale id so the finalizer cannot silently use bad identity data.
+        if (currentIngredientId && !currentIngredient) {
+          changed = true;
+          const next = { ...item };
+          delete next.ingredientId;
+          return next;
+        }
+
+        return item;
       },
     );
 
