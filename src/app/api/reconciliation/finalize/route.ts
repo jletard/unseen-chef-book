@@ -21,8 +21,7 @@ async function bindUniqueExistingIngredients(drafts: DraftRow[]) {
   const [ingredientResult, aliasResult] = await Promise.all([
     supabaseAdmin
       .from("ingredients")
-      .select("id, name, normalized_name")
-      .is("retired_at", null),
+      .select("id, name, normalized_name, retired_at"),
     supabaseAdmin
       .from("ingredient_aliases")
       .select("ingredient_id, normalized_alias"),
@@ -33,14 +32,18 @@ async function bindUniqueExistingIngredients(drafts: DraftRow[]) {
   const ingredientById = new Map(
     (ingredientResult.data ?? []).map((row) => [
       String(row.id),
-      { id: String(row.id), name: String(row.name ?? "") },
+      {
+        id: String(row.id),
+        name: String(row.name ?? ""),
+        retired: Boolean(row.retired_at),
+      },
     ]),
   );
-  const byName = new Map<string, Map<string, { id: string; name: string }>>();
+  const byName = new Map<string, Map<string, { id: string; name: string; retired: boolean }>>();
 
-  function addMatch(key: string, ingredient: { id: string; name: string }) {
+  function addMatch(key: string, ingredient: { id: string; name: string; retired: boolean }) {
     if (!key) return;
-    const matches = byName.get(key) ?? new Map<string, { id: string; name: string }>();
+    const matches = byName.get(key) ?? new Map<string, { id: string; name: string; retired: boolean }>();
     matches.set(ingredient.id, ingredient);
     byName.set(key, matches);
   }
@@ -85,6 +88,26 @@ async function bindUniqueExistingIngredients(drafts: DraftRow[]) {
     });
 
     if (!changed) continue;
+    const matchedIngredientIds = nextItems
+      .filter((item) => item.kind === "ingredient" && typeof item.ingredientId === "string")
+      .map((item) => String(item.ingredientId));
+    const retiredMatches = matchedIngredientIds
+      .map((id) => ingredientById.get(id))
+      .filter((ingredient) => ingredient?.retired)
+      .map((ingredient) => ingredient!.id);
+
+    if (retiredMatches.length) {
+      const { error: reviveError } = await supabaseAdmin
+        .from("ingredients")
+        .update({ retired_at: null, active: true, updated_at: new Date().toISOString() })
+        .in("id", retiredMatches);
+      if (reviveError) throw new Error(reviveError.message);
+      for (const id of retiredMatches) {
+        const ingredient = ingredientById.get(id);
+        if (ingredient) ingredient.retired = false;
+      }
+    }
+
     const nextPayload = { ...draft.draft_payload, items: nextItems };
     const { error: updateError } = await supabaseAdmin
       .from("recipe_drafts")
@@ -159,7 +182,7 @@ async function loadFinalizationPreview() {
       .select("id, draft_payload, generation_metadata")
       .eq("draft_state", "ready_for_review")
       .eq("review_bucket", "ready"),
-    supabaseAdmin.from("ingredients").select("id, name, normalized_name").is("retired_at", null),
+    supabaseAdmin.from("ingredients").select("id, name, normalized_name, retired_at"),
     supabaseAdmin.from("ingredient_aliases").select("ingredient_id, normalized_alias"),
     supabaseAdmin
       .from("recipes")
