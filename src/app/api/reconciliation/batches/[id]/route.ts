@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const activeJobStatuses = new Set(["queued", "processing", "running", "leased"]);
+const activeJobStatuses = new Set(["processing", "running", "leased"]);
 
 export async function DELETE(
   _request: Request,
@@ -40,7 +40,7 @@ export async function DELETE(
 
   if ((jobs ?? []).some((job) => activeJobStatuses.has(String(job.status)))) {
     return NextResponse.json(
-      { error: "Finish or stop the active batch before removing it." },
+      { error: "This batch is currently processing. Wait for the active job to finish before removing it." },
       { status: 409 },
     );
   }
