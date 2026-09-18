@@ -70,8 +70,8 @@ export default function ApprovedRecipeEditor({ data }: { data: ApprovedRecipeEdi
     const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
     const currentById = new Map(draft.items.map((item) => [item.id, item]));
 
-    const items = (next.items ?? []).map((item, index) => {
-      const kind = item.kind === "recipe" ? "recipe" : "ingredient";
+    const items: ApprovedRecipeEditorData["items"] = (next.items ?? []).map((item, index) => {
+      const kind: "ingredient" | "recipe" = item.kind === "recipe" ? "recipe" : "ingredient";
       const name = String(item.proposedName ?? "").trim();
       const options = kind === "ingredient" ? draft.ingredientOptions : draft.componentOptions;
       const matched = options.find((option) => normalizeName(option.name) === normalizeName(name));
