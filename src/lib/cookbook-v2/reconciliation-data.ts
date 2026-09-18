@@ -23,6 +23,7 @@ export type ReconciliationDashboard = {
   sourceCounts: Record<string, number>;
   queue: ReconciliationQueueRow[];
   drafts: ReconciliationDraftRow[];
+  approvedRecipeNames: string[];
 };
 
 export type ReconciliationDraftRow = {
@@ -189,7 +190,7 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
         .eq("role", "main"),
       supabaseAdmin
         .from("recipes")
-        .select("normalized_name")
+        .select("name, normalized_name")
         .is("retired_at", null)
         .not("current_approved_version_id", "is", null),
     ]);
@@ -410,5 +411,9 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
     sourceCounts,
     queue,
     drafts: reconciliationDrafts,
+    approvedRecipeNames: (approvedRecipeResult.data ?? [])
+      .map((row) => String(row.name ?? "").trim())
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right)),
   };
 }
