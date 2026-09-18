@@ -82,10 +82,20 @@ begin
   );
 
   -- Nutrition-reference identities are self-references on ingredients.
+  -- If the canonical row itself used one of the duplicate identities as its
+  -- nutrition proxy, clear that reference instead of creating a forbidden
+  -- self-reference. Every other row can safely point at the canonical identity.
+  update public.ingredients
+    set nutrition_reference_ingredient_id = null,
+        updated_at = now()
+  where id = canonical_ingredient_id
+    and nutrition_reference_ingredient_id = any(dup_ids);
+
   update public.ingredients
     set nutrition_reference_ingredient_id = canonical_ingredient_id,
         updated_at = now()
-  where nutrition_reference_ingredient_id = any(dup_ids);
+  where id <> canonical_ingredient_id
+    and nutrition_reference_ingredient_id = any(dup_ids);
 
   -- Ingredient composition relationships also use ingredient identities.
   -- Collapse relationships that would become duplicates before repointing them.
