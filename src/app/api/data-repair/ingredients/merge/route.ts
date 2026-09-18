@@ -58,13 +58,13 @@ export async function POST(request: Request) {
   ] = await Promise.all([
     supabaseAdmin
       .from("ingredients")
-      .select("id, name")
+      .select("id, name, measurement_kind")
       .eq("id", canonicalId)
       .single(),
     duplicateIds.length > 0
       ? supabaseAdmin
           .from("ingredients")
-          .select("id, name")
+          .select("id, name, measurement_kind")
           .in("id", duplicateIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
@@ -86,6 +86,25 @@ export async function POST(request: Request) {
   if ((duplicateData ?? []).length !== duplicateIds.length) {
     return NextResponse.json(
       { error: "One or more duplicate ingredients no longer exist." },
+      { status: 409 },
+    );
+  }
+
+  const measurementKinds = new Set([
+    String(canonicalData.measurement_kind ?? ""),
+    ...(duplicateData ?? []).map((row) => String(row.measurement_kind ?? "")),
+  ]);
+  if (measurementKinds.size > 1) {
+    const details = [
+      `${canonicalData.name}: ${canonicalData.measurement_kind}`,
+      ...(duplicateData ?? []).map((row) => `${row.name}: ${row.measurement_kind}`),
+    ].join(", ");
+    return NextResponse.json(
+      {
+        error:
+          "Ingredient measurement types do not match. Fix them before merging: " +
+          details,
+      },
       { status: 409 },
     );
   }
