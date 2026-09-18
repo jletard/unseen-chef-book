@@ -93,172 +93,37 @@ export async function POST(request: Request) {
   const originalCanonicalName = String(canonicalData.name);
   const canonicalName = requestedCanonicalName || originalCanonicalName;
 
-  if (
-    requestedCanonicalName &&
-    requestedCanonicalName !== originalCanonicalName
-  ) {
-    const { error: renameError } = await supabaseAdmin
-      .from("ingredients")
-      .update({ name: requestedCanonicalName })
-      .eq("id", canonicalId);
+  const { data: mergeData, error: mergeError } = await supabaseAdmin.rpc(
+    "merge_ingredient_identity_everywhere",
+    {
+      canonical_ingredient_id: canonicalId,
+      duplicate_ingredient_ids: duplicateIds,
+      canonical_name: requestedCanonicalName || null,
+    },
+  );
 
-    if (renameError) {
-      return NextResponse.json(
-        {
-          error:
-            'The ingredient could not be renamed to "' +
-            requestedCanonicalName +
-            '": ' +
-            renameError.message,
-        },
-        { status: 409 },
-      );
-    }
+  if (mergeError) {
+    return NextResponse.json(
+      {
+        error:
+          "Ingredient identity merge failed: " +
+          mergeError.message,
+      },
+      { status: 500 },
+    );
   }
 
-  let changedRecipes: string[] = [];
-
-  if (duplicateIds.length > 0) {
-    const [
-      { data: legacyUsageData, error: legacyUsageError },
-      { data: versionUsageData, error: versionUsageError },
-    ] = await Promise.all([
-      supabaseAdmin
-        .from("recipe_items")
-        .select("recipe_id")
-        .in("ingredient_id", duplicateIds),
-      supabaseAdmin
-        .from("recipe_version_items")
-        .select("recipe_version_id")
-        .in("ingredient_id", duplicateIds),
-    ]);
-
-    const usageError = legacyUsageError ?? versionUsageError;
-    if (usageError) {
-      return NextResponse.json(
-        { error: "Recipe ingredient references could not be loaded." },
-        { status: 500 },
-      );
-    }
-
-    const recipeIds = new Set(
-      (legacyUsageData ?? []).map((row) => String(row.recipe_id)),
-    );
-
-    const versionIds = Array.from(
-      new Set((versionUsageData ?? []).map((row) => String(row.recipe_version_id))),
-    );
-
-    if (versionIds.length > 0) {
-      const { data: versionRecipes, error: versionRecipeError } = await supabaseAdmin
-        .from("recipe_versions")
-        .select("recipe_id")
-        .in("id", versionIds);
-
-      if (versionRecipeError) {
-        return NextResponse.json(
-          { error: "Approved recipe references could not be resolved." },
-          { status: 500 },
-        );
-      }
-
-      for (const row of versionRecipes ?? []) {
-        if (row.recipe_id) recipeIds.add(String(row.recipe_id));
-      }
-    }
-
-    const [
-      { error: legacyUpdateError },
-      { error: versionUpdateError },
-    ] = await Promise.all([
-      supabaseAdmin
-        .from("recipe_items")
-        .update({ ingredient_id: canonicalId })
-        .in("ingredient_id", duplicateIds),
-      supabaseAdmin
-        .from("recipe_version_items")
-        .update({ ingredient_id: canonicalId })
-        .in("ingredient_id", duplicateIds),
-    ]);
-
-    const updateError = legacyUpdateError ?? versionUpdateError;
-    if (updateError) {
-      return NextResponse.json(
-        {
-          error:
-            "The ingredient merge stopped while updating recipe references. No duplicate ingredients were deleted: " +
-            updateError.message,
-        },
-        { status: 500 },
-      );
-    }
-
-    if (recipeIds.size > 0) {
-      const { data: recipeData, error: recipeError } = await supabaseAdmin
-        .from("recipes")
-        .select("id, name")
-        .in("id", Array.from(recipeIds));
-
-      if (!recipeError) {
-        changedRecipes = (recipeData ?? [])
-          .map((row) => String(row.name))
-          .sort((a, b) => a.localeCompare(b));
-      }
-    }
-
-    const [
-      { count: remainingLegacyRefs, error: remainingLegacyError },
-      { count: remainingVersionRefs, error: remainingVersionError },
-    ] = await Promise.all([
-      supabaseAdmin
-        .from("recipe_items")
-        .select("id", { count: "exact", head: true })
-        .in("ingredient_id", duplicateIds),
-      supabaseAdmin
-        .from("recipe_version_items")
-        .select("id", { count: "exact", head: true })
-        .in("ingredient_id", duplicateIds),
-    ]);
-
-    const remainingRefError = remainingLegacyError ?? remainingVersionError;
-    if (remainingRefError) {
-      return NextResponse.json(
-        { error: "Ingredient references could not be verified before deletion: " + remainingRefError.message },
-        { status: 500 },
-      );
-    }
-
-    if ((remainingLegacyRefs ?? 0) > 0 || (remainingVersionRefs ?? 0) > 0) {
-      return NextResponse.json(
-        {
-          error:
-            "The ingredient merge stopped because recipe references still point to a duplicate ingredient. " +
-            `Legacy references: ${remainingLegacyRefs ?? 0}; approved/historical version references: ${remainingVersionRefs ?? 0}.`,
-        },
-        { status: 409 },
-      );
-    }
-
-    const { error: deleteError } = await supabaseAdmin
-      .from("ingredients")
-      .delete()
-      .in("id", duplicateIds);
-
-    if (deleteError) {
-      return NextResponse.json(
-        {
-          error:
-            "Recipe references were updated, but duplicate ingredients could not be deleted: " +
-            deleteError.message,
-        },
-        { status: 500 },
-      );
-    }
-  }
+  const result =
+    mergeData && typeof mergeData === "object" && !Array.isArray(mergeData)
+      ? (mergeData as Record<string, unknown>)
+      : {};
 
   return NextResponse.json({
-    canonicalName,
-    mergedCount: duplicateIds.length,
-    changedRecipes,
+    canonicalName: String(result.canonicalName ?? canonicalName),
+    mergedCount: Number(result.mergedCount ?? duplicateIds.length),
+    changedRecipes: Array.isArray(result.changedRecipes)
+      ? result.changedRecipes.map(String)
+      : [],
   });
+
 }
