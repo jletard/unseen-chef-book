@@ -41,6 +41,7 @@ export default function IngredientCatalog({
   const [editIngredientKind, setEditIngredientKind] = useState<IngredientKind>("simple");
   const [editLabelName, setEditLabelName] = useState("");
   const [editStatement, setEditStatement] = useState("");
+  const [editExcludeFromShopping, setEditExcludeFromShopping] = useState(false);
   const [newChildId, setNewChildId] = useState("");
   const [newChildSourceText, setNewChildSourceText] = useState("");
 
@@ -108,6 +109,7 @@ export default function IngredientCatalog({
     setEditIngredientKind(ingredient.ingredientKind);
     setEditLabelName(ingredient.labelName);
     setEditStatement(ingredient.ingredientStatement);
+    setEditExcludeFromShopping(ingredient.excludeFromShopping);
     setNewChildId("");
     setNewChildSourceText("");
     setError("");
@@ -146,6 +148,7 @@ export default function IngredientCatalog({
           ingredientKind: editIngredientKind,
           labelName: editLabelName,
           ingredientStatement: editStatement,
+          excludeFromShopping: editExcludeFromShopping,
         }),
       });
       const result = (await response.json()) as { error?: string };
@@ -308,6 +311,15 @@ export default function IngredientCatalog({
                 <button type="button" onClick={saveIngredient} disabled={busy || !editName.trim()} className="border border-blue-500 px-3 py-2 disabled:opacity-40">Save</button>
                 <button type="button" onClick={() => setEditingId(null)} disabled={busy} className="border border-zinc-600 px-3 py-2 disabled:opacity-40">Close</button>
               </div>
+
+              <label className="mt-4 flex items-center gap-2 text-sm text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={editExcludeFromShopping}
+                  onChange={(event) => setEditExcludeFromShopping(event.target.checked)}
+                />
+                Do not list separately on Shopping List
+              </label>
 
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
                 <label className="block text-sm text-zinc-300">
