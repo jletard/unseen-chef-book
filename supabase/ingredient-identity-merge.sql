@@ -81,6 +81,12 @@ begin
     where rvi.ingredient_id = any(dup_ids)
   );
 
+  -- Nutrition-reference identities are self-references on ingredients.
+  update public.ingredients
+    set nutrition_reference_ingredient_id = canonical_ingredient_id,
+        updated_at = now()
+  where nutrition_reference_ingredient_id = any(dup_ids);
+
   -- Ingredient composition relationships also use ingredient identities.
   -- Collapse relationships that would become duplicates before repointing them.
   delete from public.ingredient_components ic
@@ -167,6 +173,10 @@ begin
     from public.ingredient_components
     where parent_ingredient_id = any(dup_ids)
        or child_ingredient_id = any(dup_ids)
+  ) or exists (
+    select 1
+    from public.ingredients
+    where nutrition_reference_ingredient_id = any(dup_ids)
   ) then
     raise exception 'Ingredient references remain after canonicalization.';
   end if;
