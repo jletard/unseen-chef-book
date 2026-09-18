@@ -63,7 +63,8 @@ async function bindUniqueExistingIngredients(drafts: DraftRow[]) {
 
   for (const draft of drafts) {
     let changed = false;
-    const nextItems = recipeItems(draft).map((item) => {
+    const nextItems: Array<Record<string, unknown>> = recipeItems(draft).map(
+      (item): Record<string, unknown> => {
       if (item.kind !== "ingredient") return item;
       const existingIngredientId =
         typeof item.ingredientId === "string" ? item.ingredientId : "";
@@ -85,7 +86,8 @@ async function bindUniqueExistingIngredients(drafts: DraftRow[]) {
         proposedName: match.name,
         ingredientId: match.id,
       };
-    });
+      },
+    );
 
     if (!changed) continue;
     const matchedIngredientIds = nextItems
