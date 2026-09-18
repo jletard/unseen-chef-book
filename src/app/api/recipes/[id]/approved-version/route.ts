@@ -107,6 +107,7 @@ export async function PUT(
 
   const [
     versionNumberResult,
+    previousVersionResult,
     equipmentResult,
     ingredientResult,
     componentResult,
@@ -117,6 +118,11 @@ export async function PUT(
       .eq("recipe_id", id)
       .order("version_number", { ascending: false })
       .limit(1)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("recipe_versions")
+      .select("source_type, source_summary, production_notes")
+      .eq("id", previousVersionId)
       .maybeSingle(),
     supabaseAdmin
       .from("recipe_version_equipment")
@@ -135,6 +141,7 @@ export async function PUT(
 
   const loadError =
     versionNumberResult.error ??
+    previousVersionResult.error ??
     equipmentResult.error ??
     ingredientResult.error ??
     componentResult.error;
@@ -190,8 +197,9 @@ export async function PUT(
       portion_quantity: portionQuantity,
       portion_unit: body.portionUnit || null,
       chef_notes: body.chefNotes?.trim() || null,
-      source_type: "manual_edit",
-      source_summary: "Edited from approved recipe page",
+      production_notes: previousVersionResult.data?.production_notes ?? null,
+      source_type: previousVersionResult.data?.source_type ?? "manual",
+      source_summary: previousVersionResult.data?.source_summary ?? "Edited from approved recipe page",
       approved_by: user.id,
       content_hash: contentHash,
     })
