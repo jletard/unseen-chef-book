@@ -17,6 +17,84 @@ function recipeItems(draft: DraftRow) {
 }
 
 
+async function bindUniqueExistingIngredients(drafts: DraftRow[]) {
+  const [ingredientResult, aliasResult] = await Promise.all([
+    supabaseAdmin
+      .from("ingredients")
+      .select("id, name, normalized_name")
+      .is("retired_at", null),
+    supabaseAdmin
+      .from("ingredient_aliases")
+      .select("ingredient_id, normalized_alias"),
+  ]);
+  const error = ingredientResult.error ?? aliasResult.error;
+  if (error) throw new Error(error.message);
+
+  const ingredientById = new Map(
+    (ingredientResult.data ?? []).map((row) => [
+      String(row.id),
+      { id: String(row.id), name: String(row.name ?? "") },
+    ]),
+  );
+  const byName = new Map<string, Map<string, { id: string; name: string }>>();
+
+  function addMatch(key: string, ingredient: { id: string; name: string }) {
+    if (!key) return;
+    const matches = byName.get(key) ?? new Map<string, { id: string; name: string }>();
+    matches.set(ingredient.id, ingredient);
+    byName.set(key, matches);
+  }
+
+  for (const row of ingredientResult.data ?? []) {
+    const ingredient = ingredientById.get(String(row.id));
+    if (!ingredient) continue;
+    addMatch(normalizeCookbookName(String(row.name ?? "")), ingredient);
+    addMatch(String(row.normalized_name ?? "").trim(), ingredient);
+  }
+  for (const row of aliasResult.data ?? []) {
+    const ingredient = ingredientById.get(String(row.ingredient_id));
+    if (!ingredient) continue;
+    addMatch(normalizeCookbookName(String(row.normalized_alias ?? "")), ingredient);
+    addMatch(String(row.normalized_alias ?? "").trim(), ingredient);
+  }
+
+  for (const draft of drafts) {
+    let changed = false;
+    const nextItems = recipeItems(draft).map((item) => {
+      if (item.kind !== "ingredient") return item;
+      const existingIngredientId =
+        typeof item.ingredientId === "string" ? item.ingredientId : "";
+      if (existingIngredientId) return item;
+
+      const proposedName =
+        typeof item.proposedName === "string" ? item.proposedName.trim() : "";
+      if (!proposedName) return item;
+
+      const matches = Array.from(
+        (byName.get(normalizeCookbookName(proposedName)) ?? new Map()).values(),
+      );
+      if (matches.length !== 1) return item;
+
+      changed = true;
+      const match = matches[0];
+      return {
+        ...item,
+        proposedName: match.name,
+        ingredientId: match.id,
+      };
+    });
+
+    if (!changed) continue;
+    const nextPayload = { ...draft.draft_payload, items: nextItems };
+    const { error: updateError } = await supabaseAdmin
+      .from("recipe_drafts")
+      .update({ draft_payload: nextPayload, updated_at: new Date().toISOString() })
+      .eq("id", draft.id);
+    if (updateError) throw new Error(updateError.message);
+    draft.draft_payload = nextPayload;
+  }
+}
+
 async function bindUniqueApprovedComponents(drafts: DraftRow[]) {
   const { data: recipes, error: recipeError } = await supabaseAdmin
     .from("recipes")
@@ -81,7 +159,7 @@ async function loadFinalizationPreview() {
       .select("id, draft_payload, generation_metadata")
       .eq("draft_state", "ready_for_review")
       .eq("review_bucket", "ready"),
-    supabaseAdmin.from("ingredients").select("id, normalized_name").is("retired_at", null),
+    supabaseAdmin.from("ingredients").select("id, name, normalized_name").is("retired_at", null),
     supabaseAdmin.from("ingredient_aliases").select("ingredient_id, normalized_alias"),
     supabaseAdmin
       .from("recipes")
@@ -94,15 +172,28 @@ async function loadFinalizationPreview() {
   const drafts = (draftResult.data ?? []) as DraftRow[];
   const ingredientMatches = new Map<string, Set<string>>();
   for (const row of ingredientResult.data ?? []) {
-    if (!row.normalized_name) continue;
-    const matches = ingredientMatches.get(row.normalized_name) ?? new Set<string>();
-    matches.add(row.id);
-    ingredientMatches.set(row.normalized_name, matches);
+    const keys = new Set([
+      normalizeCookbookName(String(row.name ?? "")),
+      String(row.normalized_name ?? "").trim(),
+    ]);
+    for (const key of keys) {
+      if (!key) continue;
+      const matches = ingredientMatches.get(key) ?? new Set<string>();
+      matches.add(row.id);
+      ingredientMatches.set(key, matches);
+    }
   }
   for (const row of aliasResult.data ?? []) {
-    const matches = ingredientMatches.get(row.normalized_alias) ?? new Set<string>();
-    matches.add(row.ingredient_id);
-    ingredientMatches.set(row.normalized_alias, matches);
+    const keys = new Set([
+      normalizeCookbookName(String(row.normalized_alias ?? "")),
+      String(row.normalized_alias ?? "").trim(),
+    ]);
+    for (const key of keys) {
+      if (!key) continue;
+      const matches = ingredientMatches.get(key) ?? new Set<string>();
+      matches.add(row.ingredient_id);
+      ingredientMatches.set(key, matches);
+    }
   }
   const approvedRecipes = new Map<string, number>();
   const approvedRecipeVersions = new Set<string>();
@@ -232,9 +323,11 @@ export async function POST() {
       );
     }
 
-    // Preview already treats a uniquely named approved recipe as a resolved
-    // component. Persist that exact recipe/version onto the draft before the
-    // finalization RPC so the RPC sees the same resolved relationship.
+    // Preview already treats uniquely matched ingredient identities and
+    // approved component recipes as resolved. Persist those exact IDs onto the
+    // drafts before the finalization RPC so the RPC sees the same relationships
+    // instead of attempting duplicate inserts by name.
+    await bindUniqueExistingIngredients(drafts);
     await bindUniqueApprovedComponents(drafts);
 
     const orderedDrafts = dependencyOrder(drafts);
