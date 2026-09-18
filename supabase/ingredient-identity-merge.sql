@@ -81,6 +81,38 @@ begin
     where rvi.ingredient_id = any(dup_ids)
   );
 
+  -- Ingredient composition relationships also use ingredient identities.
+  -- Collapse relationships that would become duplicates before repointing them.
+  delete from public.ingredient_components ic
+  where ic.child_ingredient_id = any(dup_ids)
+    and exists (
+      select 1
+      from public.ingredient_components keep
+      where keep.parent_ingredient_id = ic.parent_ingredient_id
+        and keep.child_ingredient_id = canonical_ingredient_id
+    );
+
+  update public.ingredient_components
+    set child_ingredient_id = canonical_ingredient_id
+  where child_ingredient_id = any(dup_ids);
+
+  delete from public.ingredient_components ic
+  where ic.parent_ingredient_id = any(dup_ids)
+    and exists (
+      select 1
+      from public.ingredient_components keep
+      where keep.parent_ingredient_id = canonical_ingredient_id
+        and keep.child_ingredient_id = ic.child_ingredient_id
+    );
+
+  update public.ingredient_components
+    set parent_ingredient_id = canonical_ingredient_id
+  where parent_ingredient_id = any(dup_ids);
+
+  delete from public.ingredient_components
+  where parent_ingredient_id = canonical_ingredient_id
+    and child_ingredient_id = canonical_ingredient_id;
+
   -- Legacy/direct recipe rows have no immutable-version guard.
   update public.recipe_items
     set ingredient_id = canonical_ingredient_id
@@ -130,6 +162,11 @@ begin
   ) or exists (
     select 1 from public.recipe_version_items
     where ingredient_id = any(dup_ids)
+  ) or exists (
+    select 1
+    from public.ingredient_components
+    where parent_ingredient_id = any(dup_ids)
+       or child_ingredient_id = any(dup_ids)
   ) then
     raise exception 'Ingredient references remain after canonicalization.';
   end if;
