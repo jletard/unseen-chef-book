@@ -78,6 +78,13 @@ type MenuItemSourceRow = {
   name: string;
 };
 
+type BulkItemSourceRow = {
+  id: string;
+  name: string;
+  category: string;
+  is_active: boolean;
+};
+
 async function ensureMenuItemProductionCoverage() {
   const [menuResult, sourceResult] = await Promise.all([
     supabaseAdmin.from("menu_items_v2").select("id, name"),
@@ -146,11 +153,98 @@ async function ensureMenuItemProductionCoverage() {
   }
 }
 
+async function ensureBulkItemProductionCoverage() {
+  const [bulkResult, sourceResult, productionResult] = await Promise.all([
+    supabaseAdmin
+      .from("bulk_items")
+      .select("id, name, category, is_active"),
+    supabaseAdmin
+      .from("production_item_sources")
+      .select("source_id")
+      .eq("source_type", "bulk_item")
+      .neq("mapping_state", "rejected"),
+    supabaseAdmin
+      .from("production_items")
+      .select("id, normalized_name")
+      .is("retired_at", null),
+  ]);
+
+  const error = bulkResult.error ?? sourceResult.error ?? productionResult.error;
+  if (error) {
+    throw new Error(`Unable to verify bulk-item reconciliation coverage: ${error.message}`);
+  }
+
+  const coveredBulkIds = new Set(
+    (sourceResult.data ?? [])
+      .map((row) => row.source_id ? String(row.source_id) : "")
+      .filter(Boolean),
+  );
+
+  const productionByName = new Map(
+    (productionResult.data ?? [])
+      .map((row) => [String(row.normalized_name ?? ""), String(row.id)] as const)
+      .filter(([name]) => Boolean(name)),
+  );
+
+  for (const bulkItem of (bulkResult.data ?? []) as BulkItemSourceRow[]) {
+    if (coveredBulkIds.has(bulkItem.id)) continue;
+
+    const normalizedName = normalizeCookbookName(bulkItem.name);
+    let productionItemId = productionByName.get(normalizedName) ?? "";
+
+    if (!productionItemId) {
+      const category = bulkItem.category.trim().toLowerCase();
+      const kind = category.includes("protein") ? "bulk_protein" : "bulk_side";
+
+      const { data: productionItem, error: productionError } = await supabaseAdmin
+        .from("production_items")
+        .insert({
+          name: bulkItem.name,
+          normalized_name: normalizedName,
+          kind,
+          active: bulkItem.is_active,
+          recipe_requirement: "required",
+        })
+        .select("id")
+        .single();
+
+      if (productionError || !productionItem) {
+        throw new Error(
+          `Could not create production coverage for bulk item "${bulkItem.name}": ${productionError?.message ?? "unknown error"}`,
+        );
+      }
+
+      productionItemId = String(productionItem.id);
+      productionByName.set(normalizedName, productionItemId);
+    }
+
+    const { error: sourceError } = await supabaseAdmin
+      .from("production_item_sources")
+      .insert({
+        production_item_id: productionItemId,
+        source_type: "bulk_item",
+        source_id: bulkItem.id,
+        source_name_snapshot: bulkItem.name,
+        normalized_source_name: normalizedName,
+        mapping_state: "confirmed",
+      });
+
+    if (sourceError && sourceError.code !== "23505") {
+      throw new Error(
+        `Could not attach reconciliation coverage for bulk item "${bulkItem.name}": ${sourceError.message}`,
+      );
+    }
+  }
+}
+
 export async function getReconciliationDashboardV2(): Promise<ReconciliationDashboard> {
-  // Reconciliation should cover every menu item in the system. Order category
-  // and weekly availability are Admin concerns and must never decide whether a
-  // recipe belongs in Book.
-  await ensureMenuItemProductionCoverage();
+  // Reconciliation covers both weekly menu items and Bulk Meal Prep catalog
+  // items. Availability/order state must not decide whether Book knows how to
+  // make a food item.
+  await Promise.all([
+    ensureMenuItemProductionCoverage(),
+    ensureBulkItemProductionCoverage(),
+  ]);
 
   const [
     productionResult,
@@ -255,18 +349,18 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
   );
 
   // Do not rely on a historical reconciliation task having been created.
-  // Every menu item without recipe knowledge belongs in the queue, regardless
-  // of category or whether Admin currently offers it for sale.
+  // Every weekly-menu or bulk catalog item without recipe knowledge belongs in
+  // the queue, regardless of whether Admin currently offers it for sale.
   const existingMissingRecipeIds = new Set(
     tasks
       .filter((task) => task.task_type === "missing_recipe")
       .map((task) => task.subject_id),
   );
-  const menuProductionItemIds = new Set(
+  const requiredProductionItemIds = new Set(
     sources
       .filter(
         (source) =>
-          source.source_type === "menu_item" &&
+          (source.source_type === "menu_item" || source.source_type === "bulk_item") &&
           source.mapping_state === "confirmed" &&
           Boolean(source.source_id),
       )
@@ -274,7 +368,7 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
   );
 
   const missingTaskProductionIds: string[] = [];
-  for (const productionItemId of menuProductionItemIds) {
+  for (const productionItemId of requiredProductionItemIds) {
     if (
       linkedProductionItemIds.has(productionItemId) ||
       existingMissingRecipeIds.has(productionItemId)
@@ -285,9 +379,9 @@ export async function getReconciliationDashboardV2(): Promise<ReconciliationDash
   }
 
   // Batch creation is intentionally backed by reconciliation_tasks. If Book
-  // discovers a genuinely missing recipe from live menu coverage, persist that
-  // task here instead of showing a synthetic candidate that the batch RPC will
-  // later reject as "no longer needs a recipe."
+  // discovers a genuinely missing recipe from live menu or bulk coverage,
+  // persist that task here instead of showing a synthetic candidate that the
+  // batch RPC will later reject as "no longer needs a recipe."
   if (missingTaskProductionIds.length) {
     const rows = missingTaskProductionIds.map((productionItemId) => ({
       task_type: "missing_recipe",
