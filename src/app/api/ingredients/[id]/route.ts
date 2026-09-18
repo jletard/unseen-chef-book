@@ -21,6 +21,7 @@ export async function PATCH(
     ingredientKind?: string;
     labelName?: string;
     ingredientStatement?: string;
+    excludeFromShopping?: boolean;
   };
   const name = body.name?.trim();
   const measurementKind = body.measurementKind?.trim();
@@ -63,6 +64,7 @@ export async function PATCH(
 
   if (body.labelName !== undefined) update.label_name = labelName || null;
   if (body.ingredientStatement !== undefined) update.ingredient_statement = ingredientStatement || null;
+  if (body.excludeFromShopping !== undefined) update.exclude_from_shopping = Boolean(body.excludeFromShopping);
 
   const declarationChanged = body.labelName !== undefined
     && (existing.label_name ?? "").trim() !== labelName;
@@ -79,7 +81,7 @@ export async function PATCH(
     .from("ingredients")
     .update(update)
     .eq("id", id)
-    .select("id, name, measurement_kind, ingredient_kind, label_name, ingredient_statement, label_review_status")
+    .select("id, name, measurement_kind, ingredient_kind, label_name, ingredient_statement, label_review_status, exclude_from_shopping")
     .single();
 
   if (error) {
