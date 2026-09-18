@@ -119,12 +119,23 @@ export async function POST(request: Request) {
   let changedRecipes: string[] = [];
 
   if (duplicateIds.length > 0) {
-    const { data: usageData, error: usageError } = await supabaseAdmin
-      .from("recipe_items")
-      .select("recipe_id")
-      .eq("item_type", "ingredient")
-      .in("ingredient_id", duplicateIds);
+    const [
+      { data: legacyUsageData, error: legacyUsageError },
+      { data: versionUsageData, error: versionUsageError },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("recipe_items")
+        .select("recipe_id")
+        .eq("item_type", "ingredient")
+        .in("ingredient_id", duplicateIds),
+      supabaseAdmin
+        .from("recipe_version_items")
+        .select("recipe_version_id")
+        .eq("item_kind", "ingredient")
+        .in("ingredient_id", duplicateIds),
+    ]);
 
+    const usageError = legacyUsageError ?? versionUsageError;
     if (usageError) {
       return NextResponse.json(
         { error: "Recipe ingredient references could not be loaded." },
@@ -132,16 +143,49 @@ export async function POST(request: Request) {
       );
     }
 
-    const recipeIds = Array.from(
-      new Set((usageData ?? []).map((row) => String(row.recipe_id))),
+    const recipeIds = new Set(
+      (legacyUsageData ?? []).map((row) => String(row.recipe_id)),
     );
 
-    const { error: updateError } = await supabaseAdmin
-      .from("recipe_items")
-      .update({ ingredient_id: canonicalId })
-      .eq("item_type", "ingredient")
-      .in("ingredient_id", duplicateIds);
+    const versionIds = Array.from(
+      new Set((versionUsageData ?? []).map((row) => String(row.recipe_version_id))),
+    );
 
+    if (versionIds.length > 0) {
+      const { data: versionRecipes, error: versionRecipeError } = await supabaseAdmin
+        .from("recipe_versions")
+        .select("recipe_id")
+        .in("id", versionIds);
+
+      if (versionRecipeError) {
+        return NextResponse.json(
+          { error: "Approved recipe references could not be resolved." },
+          { status: 500 },
+        );
+      }
+
+      for (const row of versionRecipes ?? []) {
+        if (row.recipe_id) recipeIds.add(String(row.recipe_id));
+      }
+    }
+
+    const [
+      { error: legacyUpdateError },
+      { error: versionUpdateError },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("recipe_items")
+        .update({ ingredient_id: canonicalId })
+        .eq("item_type", "ingredient")
+        .in("ingredient_id", duplicateIds),
+      supabaseAdmin
+        .from("recipe_version_items")
+        .update({ ingredient_id: canonicalId })
+        .eq("item_kind", "ingredient")
+        .in("ingredient_id", duplicateIds),
+    ]);
+
+    const updateError = legacyUpdateError ?? versionUpdateError;
     if (updateError) {
       return NextResponse.json(
         {
@@ -153,11 +197,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (recipeIds.length > 0) {
+    if (recipeIds.size > 0) {
       const { data: recipeData, error: recipeError } = await supabaseAdmin
         .from("recipes")
         .select("id, name")
-        .in("id", recipeIds);
+        .in("id", Array.from(recipeIds));
 
       if (!recipeError) {
         changedRecipes = (recipeData ?? [])
