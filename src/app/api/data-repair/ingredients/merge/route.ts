@@ -126,12 +126,10 @@ export async function POST(request: Request) {
       supabaseAdmin
         .from("recipe_items")
         .select("recipe_id")
-        .eq("item_type", "ingredient")
         .in("ingredient_id", duplicateIds),
       supabaseAdmin
         .from("recipe_version_items")
         .select("recipe_version_id")
-        .eq("item_kind", "ingredient")
         .in("ingredient_id", duplicateIds),
     ]);
 
@@ -176,12 +174,10 @@ export async function POST(request: Request) {
       supabaseAdmin
         .from("recipe_items")
         .update({ ingredient_id: canonicalId })
-        .eq("item_type", "ingredient")
         .in("ingredient_id", duplicateIds),
       supabaseAdmin
         .from("recipe_version_items")
         .update({ ingredient_id: canonicalId })
-        .eq("item_kind", "ingredient")
         .in("ingredient_id", duplicateIds),
     ]);
 
@@ -208,6 +204,39 @@ export async function POST(request: Request) {
           .map((row) => String(row.name))
           .sort((a, b) => a.localeCompare(b));
       }
+    }
+
+    const [
+      { count: remainingLegacyRefs, error: remainingLegacyError },
+      { count: remainingVersionRefs, error: remainingVersionError },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("recipe_items")
+        .select("id", { count: "exact", head: true })
+        .in("ingredient_id", duplicateIds),
+      supabaseAdmin
+        .from("recipe_version_items")
+        .select("id", { count: "exact", head: true })
+        .in("ingredient_id", duplicateIds),
+    ]);
+
+    const remainingRefError = remainingLegacyError ?? remainingVersionError;
+    if (remainingRefError) {
+      return NextResponse.json(
+        { error: "Ingredient references could not be verified before deletion: " + remainingRefError.message },
+        { status: 500 },
+      );
+    }
+
+    if ((remainingLegacyRefs ?? 0) > 0 || (remainingVersionRefs ?? 0) > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "The ingredient merge stopped because recipe references still point to a duplicate ingredient. " +
+            `Legacy references: ${remainingLegacyRefs ?? 0}; approved/historical version references: ${remainingVersionRefs ?? 0}.`,
+        },
+        { status: 409 },
+      );
     }
 
     const { error: deleteError } = await supabaseAdmin
