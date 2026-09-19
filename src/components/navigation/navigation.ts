@@ -10,6 +10,12 @@ export type NavigationSection = NavigationItem & {
 
 export const navigationSections: NavigationSection[] = [
   {
+    label: "Home",
+    href: "/dashboard",
+    matchPath: "/dashboard",
+    children: [],
+  },
+  {
     label: "Planning",
     href: "/planning/menu-items",
     matchPath: "/planning",
