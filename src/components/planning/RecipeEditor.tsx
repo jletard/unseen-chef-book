@@ -218,6 +218,22 @@ export default function RecipeEditor({
     return result;
   }
 
+  async function approveRecipe() {
+    begin();
+    try {
+      await readResponse(
+        await fetch("/api/recipes/" + recipe.id + "/approved-version", {
+          method: "POST",
+        }),
+      );
+      setMessage("Recipe approved.");
+      router.refresh();
+      finish();
+    } catch (approvalError) {
+      finish(approvalError);
+    }
+  }
+
   async function saveRecipe() {
     begin();
     try {
@@ -593,7 +609,19 @@ export default function RecipeEditor({
           <span className="mb-1 block text-zinc-400">Chef notes</span>
           <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} className="w-full border border-zinc-600 bg-black px-3 py-2" />
         </label>
-        <button type="button" disabled={busy} onClick={saveRecipe} className="mt-4 border border-blue-500 px-4 py-2 disabled:opacity-40">Save Recipe Details</button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" disabled={busy} onClick={saveRecipe} className="border border-blue-500 px-4 py-2 disabled:opacity-40">Save Recipe Details</button>
+          {recipe.status === "draft" ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={approveRecipe}
+              className="border border-emerald-600 px-4 py-2 font-semibold text-emerald-300 disabled:opacity-40"
+            >
+              Approve Recipe
+            </button>
+          ) : null}
+        </div>
       </section>
 
       <section className="border border-zinc-700 bg-zinc-950 p-4">
