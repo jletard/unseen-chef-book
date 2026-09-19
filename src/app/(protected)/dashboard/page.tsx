@@ -157,11 +157,15 @@ export default async function DashboardPage() {
             tone={reconciliationCount > 0 ? "warning" : "good"}
           />
           <MetricCard
-            label="Draft Recipes"
-            value={draftRecipes.length}
-            detail={draftRecipes.length ? "Recipes still marked draft." : "No draft recipes hanging around."}
-            href="/planning/recipes"
-            tone={draftRecipes.length > 0 ? "warning" : "good"}
+            label="Drafts to Review"
+            value={reconciliation.drafts.length}
+            detail={
+              reconciliation.drafts.length
+                ? "Recipe drafts waiting in the reconciliation review queue."
+                : "No reconciliation drafts waiting for review."
+            }
+            href="/planning/reconciliation"
+            tone={reconciliation.drafts.length > 0 ? "warning" : "good"}
           />
           <MetricCard
             label="Ingredient Label Review"
@@ -239,7 +243,7 @@ export default async function DashboardPage() {
           <MetricCard
             label="Complete Recipes"
             value={completeRecipes.length}
-            detail={`${recipes.length} recipes total.`}
+            detail={`${recipes.length} recipe records total · ${draftRecipes.length} still marked draft in the recipe table.`}
             href="/planning/recipes"
           />
           <MetricCard
