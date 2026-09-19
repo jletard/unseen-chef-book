@@ -288,3 +288,217 @@ export async function PUT(
 
   return NextResponse.json({ id, versionId: newVersionId });
 }
+
+
+export async function POST(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+
+  const { id } = await context.params;
+
+  const [
+    recipeResult,
+    itemResult,
+    stepResult,
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("recipes")
+      .select("id, name, recipe_type, status, yield_kind, base_yield, yield_unit, minimum_batch, notes, current_approved_version_id")
+      .eq("id", id)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("recipe_items")
+      .select("item_type, ingredient_id, component_recipe_id, quantity, unit, preparation_note, sort_order")
+      .eq("recipe_id", id)
+      .order("sort_order", { ascending: true }),
+    supabaseAdmin
+      .from("recipe_steps")
+      .select("instruction, step_number")
+      .eq("recipe_id", id)
+      .order("step_number", { ascending: true }),
+  ]);
+
+  const loadError = recipeResult.error ?? itemResult.error ?? stepResult.error;
+  if (loadError) {
+    return NextResponse.json({ error: "Draft recipe could not be loaded: " + loadError.message }, { status: 500 });
+  }
+
+  const recipe = recipeResult.data;
+  if (!recipe) return NextResponse.json({ error: "Recipe not found." }, { status: 404 });
+  if (recipe.current_approved_version_id) {
+    return NextResponse.json({ error: "This recipe already has an approved version." }, { status: 409 });
+  }
+
+  const name = String(recipe.name ?? "").trim();
+  const recipeType = String(recipe.recipe_type ?? "");
+  const yieldKind = String(recipe.yield_kind ?? "");
+  const yieldUnit = String(recipe.yield_unit ?? "");
+  const baseYield = Number(recipe.base_yield);
+  const minimumBatch = Number(recipe.minimum_batch);
+  const items = itemResult.data ?? [];
+  const steps = stepResult.data ?? [];
+
+  if (
+    !name ||
+    !recipeType ||
+    !yieldKind ||
+    !yieldUnit ||
+    !Number.isFinite(baseYield) ||
+    baseYield <= 0 ||
+    !Number.isFinite(minimumBatch) ||
+    minimumBatch <= 0
+  ) {
+    return NextResponse.json(
+      { error: "Finish the recipe name, type, yield, and minimum batch before approving it." },
+      { status: 400 },
+    );
+  }
+
+  if (items.length === 0) {
+    return NextResponse.json({ error: "Add at least one ingredient or component before approving." }, { status: 400 });
+  }
+  if (steps.length === 0 || steps.some((step) => !String(step.instruction ?? "").trim())) {
+    return NextResponse.json({ error: "Add at least one complete preparation step before approving." }, { status: 400 });
+  }
+
+  const componentRecipeIds = items
+    .filter((item) => item.item_type === "component")
+    .map((item) => String(item.component_recipe_id ?? ""))
+    .filter(Boolean);
+
+  const { data: componentRecipes, error: componentError } = componentRecipeIds.length
+    ? await supabaseAdmin
+        .from("recipes")
+        .select("id, current_approved_version_id")
+        .in("id", componentRecipeIds)
+    : { data: [], error: null };
+
+  if (componentError) {
+    return NextResponse.json({ error: "Component recipes could not be loaded: " + componentError.message }, { status: 500 });
+  }
+
+  const componentVersions = new Map(
+    (componentRecipes ?? []).map((row) => [
+      String(row.id),
+      row.current_approved_version_id ? String(row.current_approved_version_id) : "",
+    ]),
+  );
+
+  for (const item of items) {
+    if (
+      item.item_type === "component" &&
+      !componentVersions.get(String(item.component_recipe_id ?? ""))
+    ) {
+      return NextResponse.json(
+        { error: "Every component must have an approved recipe before this recipe can be approved." },
+        { status: 409 },
+      );
+    }
+  }
+
+  const hashPayload = {
+    name,
+    recipeType,
+    yieldKind,
+    baseYield,
+    yieldUnit,
+    minimumBatch,
+    notes: String(recipe.notes ?? ""),
+    items,
+    steps,
+  };
+  const contentHash = createHash("sha256").update(JSON.stringify(hashPayload)).digest("hex");
+
+  const { data: version, error: versionError } = await supabaseAdmin
+    .from("recipe_versions")
+    .insert({
+      recipe_id: id,
+      version_number: 1,
+      supersedes_version_id: null,
+      yield_kind: yieldKind,
+      base_yield: baseYield,
+      yield_unit: yieldUnit,
+      minimum_batch_quantity: minimumBatch,
+      minimum_batch_unit: yieldUnit,
+      portion_quantity: null,
+      portion_unit: null,
+      chef_notes: recipe.notes ? String(recipe.notes) : null,
+      production_notes: null,
+      source_type: "manual",
+      source_summary: "Approved from legacy draft recipe",
+      approved_by: user.id,
+      content_hash: contentHash,
+    })
+    .select("id")
+    .single();
+
+  if (versionError || !version) {
+    return NextResponse.json(
+      { error: "Approved version could not be created: " + (versionError?.message ?? "Unknown error") },
+      { status: 500 },
+    );
+  }
+
+  const versionId = String(version.id);
+
+  const { error: itemsError } = await supabaseAdmin
+    .from("recipe_version_items")
+    .insert(
+      items.map((item, index) => ({
+        recipe_version_id: versionId,
+        item_kind: item.item_type === "component" ? "recipe" : "ingredient",
+        ingredient_id: item.item_type === "ingredient" ? item.ingredient_id : null,
+        dependency_recipe_version_id:
+          item.item_type === "component"
+            ? componentVersions.get(String(item.component_recipe_id ?? "")) || null
+            : null,
+        quantity: Number(item.quantity),
+        unit: item.unit,
+        preparation_note: item.preparation_note,
+        sort_order: index,
+      })),
+    );
+
+  if (itemsError) {
+    await supabaseAdmin.from("recipe_versions").delete().eq("id", versionId);
+    return NextResponse.json({ error: "Approved recipe items could not be created: " + itemsError.message }, { status: 500 });
+  }
+
+  const { error: stepsError } = await supabaseAdmin
+    .from("recipe_version_steps")
+    .insert(
+      steps.map((step, index) => ({
+        recipe_version_id: versionId,
+        step_number: index + 1,
+        instruction: String(step.instruction).trim(),
+      })),
+    );
+
+  if (stepsError) {
+    await supabaseAdmin.from("recipe_version_items").delete().eq("recipe_version_id", versionId);
+    await supabaseAdmin.from("recipe_versions").delete().eq("id", versionId);
+    return NextResponse.json({ error: "Approved recipe steps could not be created: " + stepsError.message }, { status: 500 });
+  }
+
+  const { error: updateError } = await supabaseAdmin
+    .from("recipes")
+    .update({
+      status: "complete",
+      current_approved_version_id: versionId,
+      normalized_name: name.replace(/\s+/gu, " ").toLocaleLowerCase(),
+    })
+    .eq("id", id);
+
+  if (updateError) {
+    return NextResponse.json(
+      { error: "Approved version was created, but the recipe could not be marked complete: " + updateError.message },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ id, versionId });
+}
