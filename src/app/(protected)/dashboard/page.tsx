@@ -156,17 +156,35 @@ export default async function DashboardPage() {
             href="/planning/reconciliation#candidates"
             tone={reconciliationCount > 0 ? "warning" : "good"}
           />
-          <MetricCard
-            label="Drafts to Review"
-            value={reconciliation.drafts.length}
-            detail={
-              reconciliation.drafts.length
-                ? "Recipe drafts waiting in the reconciliation review queue."
-                : "No reconciliation drafts waiting for review."
-            }
-            href="/planning/reconciliation"
-            tone={reconciliation.drafts.length > 0 ? "warning" : "good"}
-          />
+          <div className={`h-full border p-4 ${
+            draftRecipes.length > 0
+              ? "border-amber-800 bg-amber-950/20"
+              : "border-emerald-900 bg-emerald-950/20"
+          }`}>
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Draft Recipes
+            </div>
+            <div className="mt-2 text-3xl font-bold text-zinc-100">
+              {draftRecipes.length}
+            </div>
+            {draftRecipes.length > 0 ? (
+              <div className="mt-3 space-y-1">
+                {draftRecipes.map((recipe) => (
+                  <Link
+                    key={recipe.id}
+                    href={`/planning/recipes/${recipe.id}`}
+                    className="block text-sm font-medium text-blue-300 hover:underline"
+                  >
+                    {recipe.name}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-zinc-400">
+                No recipe records still marked draft.
+              </p>
+            )}
+          </div>
           <MetricCard
             label="Ingredient Label Review"
             value={unreviewedIngredients.length}
