@@ -429,7 +429,7 @@ export default function ReconciliationDashboardV2({
 
       <FastReviewWorkspace drafts={drafts} setDrafts={setDrafts} setMessage={setMessage} />
 
-      <section className="mt-8">
+      <section id="candidates" className="mt-8 scroll-mt-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">Reconciliation candidates</h2>
