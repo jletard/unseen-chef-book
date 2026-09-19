@@ -141,7 +141,7 @@ export default async function DashboardPage() {
             </p>
           </div>
           <Link
-            href="/planning/reconciliation"
+            href="/planning/reconciliation#candidates"
             className="text-sm font-medium text-blue-300 hover:underline"
           >
             Open Reconciliation →
@@ -153,7 +153,7 @@ export default async function DashboardPage() {
             label="Reconciliation"
             value={reconciliationCount}
             detail={`${reconciliation.missingRecipes} missing recipes · ${reconciliation.openIdentityDecisions} identity decisions · ${reconciliation.drafts.length} drafts ready`}
-            href="/planning/reconciliation"
+            href="/planning/reconciliation#candidates"
             tone={reconciliationCount > 0 ? "warning" : "good"}
           />
           <MetricCard
@@ -194,7 +194,7 @@ export default async function DashboardPage() {
               </p>
             </div>
             <Link
-              href="/planning/reconciliation"
+              href="/planning/reconciliation#candidates"
               className="border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-200 hover:bg-blue-950/30"
             >
               Fix Them
@@ -252,7 +252,7 @@ export default async function DashboardPage() {
             label="Production Items"
             value={reconciliation.totalProductionItems}
             detail="Weekly and bulk food items covered by production knowledge."
-            href="/planning/reconciliation"
+            href="/planning/reconciliation#candidates"
           />
         </div>
       </section>
