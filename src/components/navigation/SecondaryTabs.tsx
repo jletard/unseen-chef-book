@@ -14,7 +14,7 @@ export default function SecondaryTabs() {
     pathname.startsWith(section.matchPath),
   );
 
-  if (!activeSection) {
+  if (!activeSection || activeSection.children.length === 0) {
     return null;
   }
 
