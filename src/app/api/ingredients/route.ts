@@ -48,9 +48,21 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
+    if (error.code === "23505") {
+      const { data: existing, error: existingError } = await supabaseAdmin
+        .from("ingredients")
+        .select("id, name, measurement_kind, ingredient_kind, label_name, ingredient_statement, label_review_status, active, notes")
+        .ilike("name", name)
+        .maybeSingle();
+
+      if (!existingError && existing) {
+        return NextResponse.json(existing, { status: 200 });
+      }
+    }
+
     return NextResponse.json(
       { error: "Ingredient could not be created: " + error.message },
-      { status: error.code === "23505" ? 409 : 500 },
+      { status: 500 },
     );
   }
 
