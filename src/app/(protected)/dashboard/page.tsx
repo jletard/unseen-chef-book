@@ -189,7 +189,7 @@ export default async function DashboardPage() {
             label="Ingredient Label Review"
             value={unreviewedIngredients.length}
             detail={`${activeIngredients.length} active ingredients total.`}
-            href="/planning/ingredients"
+            href="/planning/ingredients?filter=needs_review"
             tone={unreviewedIngredients.length > 0 ? "warning" : "good"}
           />
           <MetricCard
