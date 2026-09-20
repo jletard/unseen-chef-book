@@ -116,7 +116,18 @@ export default function IngredientCatalog({
   }
 
   useEffect(() => {
-    const itemId = new URLSearchParams(window.location.search).get("item");
+    const searchParams = new URLSearchParams(window.location.search);
+    const requestedFilter = searchParams.get("filter");
+    if (
+      requestedFilter === "all"
+      || requestedFilter === "simple"
+      || requestedFilter === "compound"
+      || requestedFilter === "needs_review"
+    ) {
+      setFilter(requestedFilter);
+    }
+
+    const itemId = searchParams.get("item");
     if (!itemId) return;
     const ingredient = ingredients.find((candidate) => candidate.id === itemId);
     if (!ingredient) return;
