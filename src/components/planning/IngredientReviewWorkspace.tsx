@@ -216,6 +216,14 @@ export default function IngredientReviewWorkspace({
     patchDraft(id, { allergenKeys: next });
   }
 
+  function removeSuggestedChild(parentId: string, index: number) {
+    setAiChildrenByParent((current) => {
+      const next = { ...current };
+      next[parentId] = (next[parentId] ?? []).filter((_, childIndex) => childIndex !== index);
+      return next;
+    });
+  }
+
   async function persistSuggestedChildren(targetDrafts: Draft[]) {
     const draftsWithSuggestions = targetDrafts.filter(
       (draft) => (aiChildrenByParent[draft.id]?.length ?? 0) > 0,
@@ -543,20 +551,37 @@ export default function IngredientReviewWorkspace({
                       Add the actual ingredients inside this purchased product. The pasted declaration above remains the supplier wording.
                     </p>
                   </div>
-                  {childRows.length === 0 && <span className="text-sm text-amber-300">No child ingredients yet</span>}
+                  {childRows.length === 0 && (aiChildrenByParent[draft.id]?.length ?? 0) === 0 && (
+                    <span className="text-sm text-amber-300">No child ingredients yet</span>
+                  )}
+                  {(aiChildrenByParent[draft.id]?.length ?? 0) > 0 && (
+                    <span className="text-sm text-purple-300">
+                      {aiChildrenByParent[draft.id].length} pending · saved with this ingredient
+                    </span>
+                  )}
                 </div>
 
                 {(aiChildrenByParent[draft.id]?.length ?? 0) > 0 && (
                   <div className="mb-3 border border-purple-900/70 bg-purple-950/20 p-3">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-purple-300">AI suggested children</div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-purple-300">
+                      Pending child ingredients
+                    </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {(aiChildrenByParent[draft.id] ?? []).map((child, index) => (
-                        <span key={`${child.name}-${index}`} className="border border-purple-800 px-2 py-1 text-xs text-purple-200">
-                          {child.name}
-                        </span>
+                        <button
+                          type="button"
+                          key={`${child.name}-${index}`}
+                          onClick={() => removeSuggestedChild(draft.id, index)}
+                          title={`Remove ${child.name}`}
+                          className="border border-purple-800 px-2 py-1 text-xs text-purple-200 hover:border-red-700 hover:text-red-300"
+                        >
+                          {child.name} ×
+                        </button>
                       ))}
                     </div>
-                    <p className="mt-2 text-xs text-zinc-500">These will be linked when you save this ingredient. Missing child ingredients will be created automatically.</p>
+                    <p className="mt-2 text-xs text-zinc-500">
+                      Staged, not saved yet. Save &amp; mark reviewed will create any missing ingredient records and link all of these. Click × to remove a bad suggestion first.
+                    </p>
                   </div>
                 )}
 
@@ -582,7 +607,7 @@ export default function IngredientReviewWorkspace({
                     onChange={(event) => setNewChildByParent((current) => ({ ...current, [draft.id]: event.target.value }))}
                     className="min-w-64 flex-1 border border-zinc-700 bg-black px-3 py-2"
                   >
-                    <option value="">Choose child ingredient…</option>
+                    <option value="">Add another child ingredient…</option>
                     {availableChildren.map((candidate) => (
                       <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
                     ))}
