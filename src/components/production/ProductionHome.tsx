@@ -109,7 +109,12 @@ export default function ProductionHome() {
                         }
                         className="flex w-full items-start justify-between gap-2 px-2 py-0.5 text-left text-xs hover:bg-zinc-900 focus:bg-zinc-900 sm:text-sm"
                       >
-                        <div className="min-w-0 font-medium leading-tight">{item.name}</div>
+                        <div className="min-w-0 font-medium leading-tight">
+                          {item.name}
+                          {!item.photoUrl ? (
+                            <span className="ml-1 text-amber-300" title="Needs picture" aria-label="Needs picture">*</span>
+                          ) : null}
+                        </div>
                         <div className="shrink-0 font-bold">×{item.quantity}</div>
                       </button>
                     ))}
@@ -136,7 +141,12 @@ export default function ProductionHome() {
                           }
                           className="flex w-full items-start justify-between gap-2 px-2 py-0.5 text-left text-xs hover:bg-zinc-900 focus:bg-zinc-900 sm:text-sm"
                         >
-                          <div className="min-w-0 font-medium leading-tight">{item.name}</div>
+                          <div className="min-w-0 font-medium leading-tight">
+                            {item.name}
+                            {!item.photoUrl ? (
+                              <span className="ml-1 text-amber-300" title="Needs picture" aria-label="Needs picture">*</span>
+                            ) : null}
+                          </div>
                           <div className="shrink-0 whitespace-nowrap font-bold">
                             ×{item.quantity} <span className="font-normal text-zinc-400">{item.unitLabel}</span>
                           </div>
