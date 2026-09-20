@@ -245,6 +245,24 @@ export default function IngredientReviewWorkspace({
   }
 
   async function persistSuggestedChildren(targetDrafts: Draft[]) {
+    const draftsWithSuggestions = targetDrafts.filter(
+      (draft) => (aiChildrenByParent[draft.id]?.length ?? 0) > 0,
+    );
+
+    if (draftsWithSuggestions.length > 0) {
+      const parentResponse = await fetch("/api/ingredients/review/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          updates: draftsWithSuggestions.map((draft) => ({ ...draft, confirmed: false })),
+        }),
+      });
+      const parentResult = await parentResponse.json() as { error?: string };
+      if (!parentResponse.ok) {
+        throw new Error(parentResult.error ?? "Could not prepare compound ingredients for child links.");
+      }
+    }
+
     const resolvedByName = new Map(
       ingredients.map((ingredient) => [ingredient.name.trim().toLowerCase(), ingredient.id]),
     );
@@ -296,11 +314,48 @@ export default function IngredientReviewWorkspace({
     }
   }
 
+  async function saveOne(draft: Draft) {
+    setBusy(true);
+    setMessage(`Saving ${draft.name}…`);
+    try {
+      await persistSuggestedChildren([draft]);
+
+      const response = await fetch("/api/ingredients/review/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          updates: [{ ...draft, confirmed: true }],
+        }),
+      });
+      const result = await response.json() as { savedCount?: number; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Ingredient review save failed.");
+
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[draft.id];
+        return next;
+      });
+      setAiChildrenByParent((current) => {
+        const next = { ...current };
+        delete next[draft.id];
+        return next;
+      });
+      setMessage(`${draft.name} saved and reviewed.`);
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Ingredient review save failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveAll() {
     if (shownDrafts.length === 0) return;
     setBusy(true);
     setMessage(`Saving and reviewing ${shownDrafts.length} ingredients…`);
     try {
+      await persistSuggestedChildren(shownDrafts);
+
       const response = await fetch("/api/ingredients/review/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -310,8 +365,6 @@ export default function IngredientReviewWorkspace({
       });
       const result = await response.json() as { savedCount?: number; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Bulk review save failed.");
-
-      await persistSuggestedChildren(shownDrafts);
 
       setMessage(`Saved and reviewed ${result.savedCount ?? shownDrafts.length} ingredients, including AI-suggested child ingredients.`);
       setDrafts((current) => {
@@ -529,7 +582,7 @@ export default function IngredientReviewWorkspace({
                         </span>
                       ))}
                     </div>
-                    <p className="mt-2 text-xs text-zinc-500">These will be linked when you save all shown. Missing child ingredients will be created automatically.</p>
+                    <p className="mt-2 text-xs text-zinc-500">These will be linked when you save this ingredient. Missing child ingredients will be created automatically.</p>
                   </div>
                 )}
 
@@ -571,6 +624,17 @@ export default function IngredientReviewWorkspace({
                 </div>
               </div>
             )}
+
+            <div className="mt-5 flex items-center justify-end border-t border-zinc-800 pt-4">
+              <button
+                type="button"
+                onClick={() => saveOne(draft)}
+                disabled={busy}
+                className="border border-emerald-500 bg-emerald-950/40 px-5 py-2 font-bold text-emerald-200 disabled:opacity-40"
+              >
+                {busy ? "Saving…" : "Save & mark reviewed"}
+              </button>
+            </div>
           </section>
         );
       })}
