@@ -112,7 +112,7 @@ export default async function DashboardPage() {
     <div className="min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Cookbook Home</h1>
+          <h1 className="text-3xl font-bold">Maintenance</h1>
           <p className="mt-2 max-w-3xl text-sm text-zinc-400">
             The useful stuff first: what is incomplete, what needs attention,
             and where to go next.
@@ -280,7 +280,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mt-6">
-        <h2 className="text-xl font-bold">Go Do Something Useful</h2>
+        <h2 className="text-xl font-bold">Maintenance Tools</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {quickLinks.map((item) => (
             <Link
