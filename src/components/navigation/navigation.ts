@@ -4,15 +4,19 @@ export type NavigationItem = {
 };
 
 export type NavigationSection = NavigationItem & {
-  matchPath: string;
+  matchPaths: string[];
   children: NavigationItem[];
 };
+
+export function sectionMatchesPath(section: NavigationSection, pathname: string) {
+  return section.matchPaths.some((path) => pathname.startsWith(path));
+}
 
 export const navigationSections: NavigationSection[] = [
   {
     label: "Production",
     href: "/production",
-    matchPath: "/production",
+    matchPaths: ["/production"],
     children: [
       { label: "Today / This Week", href: "/production" },
       { label: "Production Totals", href: "/production/list" },
@@ -25,7 +29,7 @@ export const navigationSections: NavigationSection[] = [
   {
     label: "Cookbook",
     href: "/cookbook",
-    matchPath: "/cookbook",
+    matchPaths: ["/cookbook"],
     children: [
       { label: "The Cookbook", href: "/cookbook" },
     ],
@@ -33,23 +37,7 @@ export const navigationSections: NavigationSection[] = [
   {
     label: "Maintenance",
     href: "/dashboard",
-    matchPath: "/dashboard",
-    children: [
-      { label: "Maintenance Home", href: "/dashboard" },
-      { label: "Reconciliation", href: "/planning/reconciliation" },
-      { label: "Ingredients", href: "/planning/ingredients" },
-      { label: "Nutrition", href: "/planning/nutrition" },
-      { label: "Menu Items", href: "/planning/menu-items" },
-      { label: "Main Dishes", href: "/planning/main-dishes" },
-      { label: "Components", href: "/planning/components" },
-      { label: "Sides", href: "/planning/sides" },
-      { label: "Data Repair", href: "/planning/data-repair" },
-    ],
-  },
-  {
-    label: "Maintenance",
-    href: "/dashboard",
-    matchPath: "/planning",
+    matchPaths: ["/dashboard", "/planning"],
     children: [
       { label: "Maintenance Home", href: "/dashboard" },
       { label: "Reconciliation", href: "/planning/reconciliation" },
