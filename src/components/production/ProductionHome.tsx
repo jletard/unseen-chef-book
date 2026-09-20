@@ -61,17 +61,12 @@ export default function ProductionHome() {
 
   return (
     <div className="min-w-0">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-800 pb-5">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">
-            Production Book
-          </p>
-          <h1 className="mt-2 text-3xl font-bold md:text-4xl">What are we cooking?</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-            This is the working side of Book: totals, prep, recipes, shopping, and labels for the selected week.
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-2">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h1 className="text-xl font-bold md:text-2xl">Production</h1>
+          <span className="text-xs text-zinc-500">What are we cooking?</span>
         </div>
-        <div className="text-sm text-zinc-400">
+        <div className="text-xs font-medium text-zinc-400">
           {productionWeek ? formatWeek(productionWeek) : ""}
         </div>
       </div>
@@ -83,42 +78,30 @@ export default function ProductionHome() {
 
       {summary ? (
         <>
-          <section className="mt-6 grid gap-3 sm:grid-cols-3">
-            <div className="border border-zinc-800 bg-zinc-950 p-4">
-              <div className="text-xs uppercase tracking-wide text-zinc-500">Confirmed orders</div>
-              <div className="mt-2 text-3xl font-bold">{summary.confirmedOrderCount}</div>
-            </div>
-            <div className="border border-zinc-800 bg-zinc-950 p-4">
-              <div className="text-xs uppercase tracking-wide text-zinc-500">Meal portions</div>
-              <div className="mt-2 text-3xl font-bold">{summary.totalPortions}</div>
-            </div>
-            <div className="border border-zinc-800 bg-zinc-950 p-4">
-              <div className="text-xs uppercase tracking-wide text-zinc-500">Things to make</div>
-              <div className="mt-2 text-3xl font-bold">{distinctFoodItems}</div>
-            </div>
+          <section className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm">
+            <span><b className="text-zinc-100">{summary.confirmedOrderCount}</b> <span className="text-zinc-500">orders</span></span>
+            <span><b className="text-zinc-100">{summary.totalPortions}</b> <span className="text-zinc-500">meal portions</span></span>
+            <span><b className="text-zinc-100">{distinctFoodItems}</b> <span className="text-zinc-500">things to make</span></span>
           </section>
 
-          <section className="mt-6">
-            <h2 className="text-xl font-bold">Kitchen work</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {actions.map((action) => (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  className="border border-zinc-800 bg-zinc-950 p-4 hover:border-zinc-600 hover:bg-zinc-900"
-                >
-                  <div className="font-semibold">{action.title}</div>
-                  <p className="mt-1 text-sm text-zinc-500">{action.detail}</p>
-                </Link>
-              ))}
-            </div>
+          <section className="mt-2 flex gap-1 overflow-x-auto pb-1">
+            {actions.map((action) => (
+              <Link
+                key={action.href}
+                href={action.href}
+                title={action.detail}
+                className="shrink-0 border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs font-medium hover:border-zinc-600 hover:bg-zinc-900"
+              >
+                {action.title}
+              </Link>
+            ))}
           </section>
 
-          <section className="mt-7">
+          <section className="mt-3">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="text-xl font-bold">This week</h2>
-                <p className="mt-1 text-sm text-zinc-500">The fast answer before you start opening reports.</p>
+                <h2 className="text-base font-bold">This week</h2>
+                <p className="text-xs text-zinc-600">Weekly menu + bulk production</p>
               </div>
               <Link href="/production/list" className="text-sm text-blue-300 hover:underline">
                 Full production totals →
@@ -130,22 +113,22 @@ export default function ProductionHome() {
                 No confirmed production for this week.
               </div>
             ) : (
-              <div className="mt-3 grid gap-4 xl:grid-cols-2">
+              <div className="mt-2 grid gap-2 xl:grid-cols-2">
                 <section className="border border-zinc-800 bg-zinc-950">
-                  <div className="border-b border-zinc-800 px-4 py-3">
+                  <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1.5">
                     <h3 className="font-semibold">Weekly Menu</h3>
-                    <p className="mt-0.5 text-xs text-zinc-500">
+                    <p className="text-[11px] text-zinc-600">
                       {weeklyItems.length} items
                     </p>
                   </div>
                   <div className="divide-y divide-zinc-800">
                     {weeklyItems.map((item) => (
-                      <div key={item.key} className="flex items-center justify-between gap-4 px-4 py-3">
+                      <div key={item.key} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
                         <div className="min-w-0">
                           <div className="truncate font-medium">{item.name}</div>
-                          <div className="mt-0.5 text-xs text-zinc-600">{item.category}</div>
+                          <div className="text-[11px] text-zinc-600">{item.category}</div>
                         </div>
-                        <div className="shrink-0 text-xl font-bold">× {item.quantity}</div>
+                        <div className="shrink-0 text-sm font-bold">× {item.quantity}</div>
                       </div>
                     ))}
                   </div>
@@ -161,14 +144,14 @@ export default function ProductionHome() {
                   {bulkItems.length ? (
                     <div className="divide-y divide-zinc-800">
                       {bulkItems.map((item) => (
-                        <div key={item.key} className="flex items-center justify-between gap-4 px-4 py-3">
+                        <div key={item.key} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
                           <div className="min-w-0">
                             <div className="truncate font-medium">{item.name}</div>
-                            <div className="mt-0.5 text-xs text-zinc-600">
+                            <div className="text-[11px] text-zinc-600">
                               {item.category} · {item.unitLabel}
                             </div>
                           </div>
-                          <div className="shrink-0 text-xl font-bold">× {item.quantity}</div>
+                          <div className="shrink-0 text-sm font-bold">× {item.quantity}</div>
                         </div>
                       ))}
                     </div>
