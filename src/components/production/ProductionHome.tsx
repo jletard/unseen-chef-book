@@ -125,7 +125,7 @@ export default function ProductionHome() {
                     {weeklyItems.map((item) => (
                       <div key={item.key} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
                         <div className="min-w-0">
-                          <div className="truncate font-medium">{item.name}</div>
+                          <div className="font-medium leading-tight">{item.name}</div>
                           <div className="text-[11px] text-zinc-600">{item.category}</div>
                         </div>
                         <div className="shrink-0 text-sm font-bold">× {item.quantity}</div>
@@ -146,7 +146,7 @@ export default function ProductionHome() {
                       {bulkItems.map((item) => (
                         <div key={item.key} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
                           <div className="min-w-0">
-                            <div className="truncate font-medium">{item.name}</div>
+                            <div className="font-medium leading-tight">{item.name}</div>
                             <div className="text-[11px] text-zinc-600">
                               {item.category} · {item.unitLabel}
                             </div>
