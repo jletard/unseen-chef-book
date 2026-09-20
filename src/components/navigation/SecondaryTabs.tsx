@@ -5,13 +5,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { navigationSections } from "./navigation";
+import { navigationSections, sectionMatchesPath } from "./navigation";
 
 export default function SecondaryTabs() {
   const pathname = usePathname();
 
   const activeSection = navigationSections.find((section) =>
-    pathname.startsWith(section.matchPath),
+    sectionMatchesPath(section, pathname),
   );
 
   if (!activeSection || activeSection.children.length === 0) {
