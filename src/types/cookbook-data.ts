@@ -83,7 +83,7 @@ export type BulkProductionItem = {
   key: string;
   itemId: string;
   name: string;
-  category: "Proteins" | "Sides";
+  category: "Proteins" | "Vegetables" | "Starches";
   unitLabel: string;
   quantity: number;
 };
