@@ -90,7 +90,7 @@ export default function ProductionHome() {
                     <h3 className="font-semibold">Weekly Menu</h3>
                     <span className="text-[10px] text-zinc-600">{weeklyItems.length} items</span>
                   </div>
-                  <div className="divide-y divide-zinc-800">
+                  <div className="divide-y divide-zinc-800 border-b border-zinc-800">
                     {weeklyItems.map((item) => (
                       <div key={item.key} className="flex items-start justify-between gap-2 px-2 py-0.5 text-xs sm:text-sm">
                         <div className="min-w-0 font-medium leading-tight">{item.name}</div>
