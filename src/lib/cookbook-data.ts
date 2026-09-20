@@ -198,10 +198,6 @@ export async function getProductionSummary(
     }
   }
 
-  const sourceIds = [
-    ...menuItemIds.map((id) => ({ sourceType: "menu_item", sourceId: id })),
-  ];
-
   const { data: sourceRows, error: sourceError } = await supabaseAdmin
     .from("production_item_sources")
     .select("production_item_id, source_type, source_id")
