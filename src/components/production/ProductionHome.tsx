@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useProductionWeek } from "@/components/page/ProductionWeekProvider";
+import ProductionWorkPlan from "@/components/production/ProductionWorkPlan";
 import type { ProductionSummary } from "@/types/cookbook-data";
 
 function formatWeek(value: string) {
