@@ -40,6 +40,7 @@ type MenuMetadataRow = {
   short_name: string | null;
   menu_type: string;
   category: string | null;
+  photo_path: string | null;
 };
 
 type BulkOrderData = {
@@ -185,7 +186,7 @@ export async function getProductionSummary(
   if (menuItemIds.length > 0) {
     const { data: metadataData, error: metadataError } = await supabaseAdmin
       .from("menu_items_v2")
-      .select("id, short_name, menu_type, category")
+      .select("id, short_name, menu_type, category, photo_path")
       .in("id", menuItemIds);
 
     if (metadataError) {
@@ -195,6 +196,58 @@ export async function getProductionSummary(
     for (const row of (metadataData ?? []) as MenuMetadataRow[]) {
       metadata.set(row.id, row);
     }
+  }
+
+  const sourceIds = [
+    ...menuItemIds.map((id) => ({ sourceType: "menu_item", sourceId: id })),
+  ];
+
+  const { data: sourceRows, error: sourceError } = await supabaseAdmin
+    .from("production_item_sources")
+    .select("production_item_id, source_type, source_id")
+    .eq("mapping_state", "confirmed")
+    .in("source_type", ["menu_item", "bulk_item"]);
+
+  if (sourceError) {
+    throw new Error("Failed to load production recipe sources: " + sourceError.message);
+  }
+
+  const productionIds = Array.from(
+    new Set((sourceRows ?? []).map((row) => String(row.production_item_id))),
+  );
+  const recipeByProductionId = new Map<string, string>();
+
+  if (productionIds.length > 0) {
+    const { data: recipeLinkRows, error: recipeLinkError } = await supabaseAdmin
+      .from("production_item_recipe_links")
+      .select("production_item_id, recipe_id, role, sort_order")
+      .in("production_item_id", productionIds)
+      .eq("active", true)
+      .order("sort_order", { ascending: true });
+
+    if (recipeLinkError) {
+      throw new Error("Failed to load production recipe links: " + recipeLinkError.message);
+    }
+
+    for (const row of recipeLinkRows ?? []) {
+      const productionId = String(row.production_item_id);
+      if (!recipeByProductionId.has(productionId) || row.role === "main") {
+        recipeByProductionId.set(productionId, String(row.recipe_id));
+      }
+    }
+  }
+
+  const recipeBySource = new Map<string, string>();
+  for (const row of sourceRows ?? []) {
+    const recipeId = recipeByProductionId.get(String(row.production_item_id));
+    if (recipeId && row.source_id) {
+      recipeBySource.set(String(row.source_type) + ":" + String(row.source_id), recipeId);
+    }
+  }
+
+  function publicMenuImage(path: string | null | undefined) {
+    if (!path) return null;
+    return supabaseAdmin.storage.from("menu-images").getPublicUrl(path).data.publicUrl;
   }
 
   const itemMap = new Map<
@@ -240,6 +293,10 @@ export async function getProductionSummary(
           : details?.category?.trim() || "Entrees",
       quantity,
       sideRequirements: [],
+      recipeId: row.menu_item_id
+        ? recipeBySource.get("menu_item:" + row.menu_item_id) ?? null
+        : null,
+      photoUrl: details ? publicMenuImage(details.photo_path) : null,
       sideMap,
     });
   }
@@ -269,19 +326,21 @@ export async function getProductionSummary(
   );
 
   const bulkCategories = new Map<string, string>();
+  const bulkPhotoUrls = new Map<string, string | null>();
 
   if (bulkItemIds.length > 0) {
     const { data: bulkMetadataData, error: bulkMetadataError } = await supabaseAdmin
       .from("bulk_items")
-      .select("id, category")
+      .select("id, category, photo_path")
       .in("id", bulkItemIds);
 
     if (bulkMetadataError) {
       throw new Error("Failed to load bulk item categories: " + bulkMetadataError.message);
     }
 
-    for (const row of (bulkMetadataData ?? []) as Array<{ id: string; category: string }>) {
+    for (const row of (bulkMetadataData ?? []) as Array<{ id: string; category: string; photo_path: string | null }>) {
       bulkCategories.set(row.id, row.category);
+      bulkPhotoUrls.set(row.id, publicMenuImage(row.photo_path));
     }
   }
 
@@ -309,6 +368,8 @@ export async function getProductionSummary(
           category: "Proteins",
           unitLabel: protein.unitLabel,
           quantity,
+          recipeId: recipeBySource.get("bulk_item:" + protein.id) ?? null,
+          photoUrl: bulkPhotoUrls.get(protein.id) ?? null,
         });
       }
     }
@@ -327,6 +388,8 @@ export async function getProductionSummary(
         category,
         unitLabel: side.unitLabel,
         quantity: 1,
+        recipeId: recipeBySource.get("bulk_item:" + side.id) ?? null,
+        photoUrl: bulkPhotoUrls.get(side.id) ?? null,
       });
     }
   }
