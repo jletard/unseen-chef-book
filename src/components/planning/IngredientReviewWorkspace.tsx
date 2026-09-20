@@ -57,7 +57,7 @@ export default function IngredientReviewWorkspace({
     const result: Record<string, Draft> = {};
     for (const ingredient of ingredients) {
       const label = labelingById.get(ingredient.id);
-      if (ingredient.labelReviewStatus === "confirmed") continue;
+      if (!ingredient.active || ingredient.labelReviewStatus === "confirmed") continue;
       result[ingredient.id] = {
         id: ingredient.id,
         name: ingredient.name,
