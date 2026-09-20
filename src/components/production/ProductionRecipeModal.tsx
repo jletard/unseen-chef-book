@@ -61,6 +61,7 @@ export default function ProductionRecipeModal({
     }
 
     if (!target.recipeId) {
+      setLoading(false);
       setRecipe(null);
       setError("No recipe is linked to this production item.");
       return;
@@ -100,12 +101,12 @@ export default function ProductionRecipeModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-2 sm:p-4"
-      onMouseDown={onClose}
+      onPointerDown={onClose}
       role="presentation"
     >
       <div
         className="max-h-[94vh] w-full max-w-5xl overflow-y-auto border border-zinc-600 bg-zinc-950 shadow-2xl"
-        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={target.name + " recipe"}
