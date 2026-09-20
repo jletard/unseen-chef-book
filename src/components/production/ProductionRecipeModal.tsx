@@ -67,6 +67,7 @@ export default function ProductionRecipeModal({
       return;
     }
 
+    const recipeId = target.recipeId;
     const controller = new AbortController();
 
     async function load() {
@@ -76,7 +77,7 @@ export default function ProductionRecipeModal({
 
       try {
         const response = await fetch(
-          "/api/production/recipe/" + encodeURIComponent(target.recipeId!),
+          "/api/production/recipe/" + encodeURIComponent(recipeId),
           { cache: "no-store", signal: controller.signal },
         );
         const result = await response.json();
