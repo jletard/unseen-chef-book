@@ -87,81 +87,61 @@ export default function IngredientReviewWorkspace({
   const [newChildByParent, setNewChildByParent] = useState<Record<string, string>>({});
   const [aiChildrenByParent, setAiChildrenByParent] = useState<Record<string, AIChildIngredient[]>>({});
 
-  const aiSchema = useMemo<SecretAIFormSchema>(() => ({
-    name: "Ingredient review batch",
-    description:
-      "Review every listed purchased ingredient. For a true single ingredient such as fresh ginger, keep it simple and use the ingredient itself as the declaration. For packaged or compound foods such as graham cracker crumbs or Greek yogurt, fill in a useful ingredient declaration, mark it compound, identify major allergens, and list the child ingredients that should exist in the cookbook. Use common culinary knowledge when the product is generic; the chef will review before saving. Do not add products that are not in the supplied list.",
-    fields: {
-      reviews: {
-        type: "array",
-        required: true,
-        items: {
-          type: "object",
-          fields: {
-            name: {
-              type: "string",
-              required: true,
-              description: "Must exactly match one supplied ingredient name.",
-            },
-            labelName: { type: "string", required: true },
-            ingredientKind: {
-              type: "enum",
-              required: true,
-              values: ["simple", "compound"],
-            },
-            measurementKind: {
-              type: "enum",
-              required: true,
-              values: ["solid", "liquid", "countable"],
-            },
-            ingredientStatement: {
-              type: "string",
-              required: true,
-              description:
-                "Consumer ingredient declaration. For a simple ingredient, normally just the ingredient name. For a compound product, provide the ingredient list in label-ready wording.",
-            },
-            allergenKeys: {
-              type: "array",
-              required: true,
-              items: {
+  function aiSchemaFor(draft: Draft): SecretAIFormSchema {
+    return {
+      name: `Ingredient review: ${draft.name}`,
+      description:
+        "Review this one purchased ingredient. For a true single ingredient, keep it simple and use the ingredient itself as the declaration. For a packaged or compound food, fill in a useful ingredient declaration, mark it compound, identify major allergens, and list the child ingredients that should exist in the cookbook. Use common culinary knowledge when the product is generic; the chef will review before saving.",
+      fields: {
+        labelName: { type: "string", required: true },
+        ingredientKind: {
+          type: "enum",
+          required: true,
+          values: ["simple", "compound"],
+        },
+        measurementKind: {
+          type: "enum",
+          required: true,
+          values: ["solid", "liquid", "countable"],
+        },
+        ingredientStatement: {
+          type: "string",
+          required: true,
+          description:
+            "Consumer ingredient declaration. For a simple ingredient, normally just the ingredient name. For a compound product, provide the ingredient list in label-ready wording.",
+        },
+        allergenKeys: {
+          type: "array",
+          required: true,
+          items: {
+            type: "enum",
+            values: Object.keys(allergenLabels),
+          },
+        },
+        vegetarian: { type: "boolean", required: true },
+        childIngredients: {
+          type: "array",
+          required: true,
+          description:
+            "For a compound product, list constituent ingredients that should be linked as structured child ingredients. Leave empty for a simple ingredient.",
+          items: {
+            type: "object",
+            fields: {
+              name: { type: "string", required: true },
+              measurementKind: {
                 type: "enum",
-                values: Object.keys(allergenLabels),
-              },
-            },
-            vegetarian: { type: "boolean", required: true },
-            childIngredients: {
-              type: "array",
-              required: true,
-              description:
-                "For compound products, list the purchased ingredient's constituent ingredients that should be linked as structured child ingredients. Leave empty for simple ingredients.",
-              items: {
-                type: "object",
-                fields: {
-                  name: { type: "string", required: true },
-                  measurementKind: {
-                    type: "enum",
-                    required: true,
-                    values: ["solid", "liquid", "countable"],
-                  },
-                },
+                required: true,
+                values: ["solid", "liquid", "countable"],
               },
             },
           },
         },
       },
-    },
-  }), []);
+    };
+  }
 
-  const normalizedQuery = query.trim().toLowerCase();
-  const shownDrafts = Object.values(drafts).filter((draft) =>
-    !normalizedQuery
-      || draft.name.toLowerCase().includes(normalizedQuery)
-      || draft.labelName.toLowerCase().includes(normalizedQuery),
-  );
-
-  const aiCurrentValues = useMemo(() => ({
-    reviews: Object.values(drafts).map((draft) => ({
-      name: draft.name,
+  function aiCurrentValuesFor(draft: Draft) {
+    return {
       labelName: draft.labelName,
       ingredientKind: draft.ingredientKind,
       measurementKind: draft.measurementKind,
@@ -175,58 +155,43 @@ export default function IngredientReviewWorkspace({
           measurementKind: child?.measurementKind ?? "solid",
         };
       }),
-    })),
-  }), [componentsByParent, drafts, ingredientById]);
+    };
+  }
 
-  function importAI(values: Record<string, unknown>) {
-    const reviews = Array.isArray(values.reviews) ? values.reviews : [];
-    const byName = new Map(
-      Object.values(drafts).map((draft) => [draft.name.trim().toLowerCase(), draft.id]),
-    );
-    let importedCount = 0;
+  function importAIFor(draft: Draft, values: Record<string, unknown>) {
+    const allergens = Array.isArray(values.allergenKeys)
+      ? values.allergenKeys.filter((key): key is AllergenKey => typeof key === "string" && key in allergenLabels)
+      : [];
 
-    for (const review of reviews) {
-      if (typeof review !== "object" || review === null || Array.isArray(review)) continue;
-      const row = review as Record<string, unknown>;
-      const name = typeof row.name === "string" ? row.name.trim() : "";
-      const id = byName.get(name.toLowerCase());
-      if (!id) continue;
+    const children: AIChildIngredient[] = Array.isArray(values.childIngredients)
+      ? values.childIngredients.flatMap((child) => {
+          if (typeof child !== "object" || child === null || Array.isArray(child)) return [];
+          const row = child as Record<string, unknown>;
+          const name = typeof row.name === "string" ? row.name.trim() : "";
+          const measurementKind: AIChildIngredient["measurementKind"] =
+            row.measurementKind === "liquid" || row.measurementKind === "countable"
+              ? row.measurementKind
+              : "solid";
+          return name ? [{ name, measurementKind }] : [];
+        })
+      : [];
 
-      const allergens = Array.isArray(row.allergenKeys)
-        ? row.allergenKeys.filter((key): key is AllergenKey => typeof key === "string" && key in allergenLabels)
-        : [];
-      const children = Array.isArray(row.childIngredients)
-        ? row.childIngredients.flatMap((child) => {
-            if (typeof child !== "object" || child === null || Array.isArray(child)) return [];
-            const childRow = child as Record<string, unknown>;
-            const childName = typeof childRow.name === "string" ? childRow.name.trim() : "";
-            const measurementKind: AIChildIngredient["measurementKind"] =
-              childRow.measurementKind === "liquid" || childRow.measurementKind === "countable"
-                ? childRow.measurementKind
-                : "solid";
-            return childName ? [{ name: childName, measurementKind }] : [];
-          })
-        : [];
-
-      patchDraft(id, {
-        labelName: typeof row.labelName === "string" ? row.labelName : drafts[id].labelName,
-        ingredientKind: row.ingredientKind === "compound" ? "compound" : "simple",
-        measurementKind:
-          row.measurementKind === "liquid" || row.measurementKind === "countable"
-            ? row.measurementKind
-            : "solid",
-        ingredientStatement:
-          typeof row.ingredientStatement === "string"
-            ? row.ingredientStatement
-            : drafts[id].ingredientStatement,
-        allergenKeys: allergens,
-        dietaryFlags: row.vegetarian === true ? ["vegetarian"] : [],
-      });
-      setAiChildrenByParent((current) => ({ ...current, [id]: children }));
-      importedCount += 1;
-    }
-
-    setMessage(`AI filled ${importedCount} ingredient review cards. Nothing has been saved yet.`);
+    patchDraft(draft.id, {
+      labelName: typeof values.labelName === "string" ? values.labelName : draft.labelName,
+      ingredientKind: values.ingredientKind === "compound" ? "compound" : "simple",
+      measurementKind:
+        values.measurementKind === "liquid" || values.measurementKind === "countable"
+          ? values.measurementKind
+          : "solid",
+      ingredientStatement:
+        typeof values.ingredientStatement === "string"
+          ? values.ingredientStatement
+          : draft.ingredientStatement,
+      allergenKeys: allergens,
+      dietaryFlags: values.vegetarian === true ? ["vegetarian"] : [],
+    });
+    setAiChildrenByParent((current) => ({ ...current, [draft.id]: children }));
+    setMessage(`AI filled ${draft.name}. Nothing has been saved yet.`);
   }
 
   function patchDraft(id: string, patch: Partial<Draft>) {
@@ -458,14 +423,6 @@ export default function IngredientReviewWorkspace({
         </button>
       </div>
 
-      <SecretAIImportBox
-        formSchema={aiSchema}
-        currentValues={aiCurrentValues}
-        onImport={importAI}
-        successMessage="AI review data loaded into the open ingredient cards."
-        disabled={busy || Object.keys(drafts).length === 0}
-      />
-
       {message && <div className="border border-zinc-700 bg-zinc-950 p-3 text-sm text-zinc-300">{message}</div>}
 
       {shownDrafts.map((draft) => {
@@ -479,7 +436,17 @@ export default function IngredientReviewWorkspace({
           <section key={draft.id} className="border border-amber-900/70 bg-zinc-950 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">{draft.name}</h2>
-              <span className="text-sm text-amber-300">Needs review</span>
+              <div className="flex items-center gap-2">
+                <SecretAIImportBox
+                  formSchema={aiSchemaFor(draft)}
+                  currentValues={aiCurrentValuesFor(draft)}
+                  onImport={(values) => importAIFor(draft, values)}
+                  successMessage={`AI review data loaded for ${draft.name}.`}
+                  closeAfterImport
+                  disabled={busy}
+                />
+                <span className="text-sm text-amber-300">Needs review</span>
+              </div>
             </div>
 
             <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(12rem,1fr)_10rem_10rem]">
