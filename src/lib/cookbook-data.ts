@@ -252,16 +252,38 @@ export async function getProductionSummary(
         .sort((left, right) => left.name.localeCompare(right.name)),
     }))
     .sort((left, right) => {
-      if (left.category !== right.category) {
-        return left.category.localeCompare(right.category);
-      }
-
       if (right.quantity !== left.quantity) {
         return right.quantity - left.quantity;
       }
 
       return left.name.localeCompare(right.name);
     });
+
+  const bulkItemIds = Array.from(
+    new Set(
+      ((bulkData ?? []) as BulkOrderRow[]).flatMap((row) => [
+        ...(row.bulk_order?.items?.proteins ?? []).map((item) => item.id),
+        ...(row.bulk_order?.items?.sides ?? []).map((item) => item.id),
+      ]),
+    ),
+  );
+
+  const bulkCategories = new Map<string, string>();
+
+  if (bulkItemIds.length > 0) {
+    const { data: bulkMetadataData, error: bulkMetadataError } = await supabaseAdmin
+      .from("bulk_items")
+      .select("id, category")
+      .in("id", bulkItemIds);
+
+    if (bulkMetadataError) {
+      throw new Error("Failed to load bulk item categories: " + bulkMetadataError.message);
+    }
+
+    for (const row of (bulkMetadataData ?? []) as Array<{ id: string; category: string }>) {
+      bulkCategories.set(row.id, row.category);
+    }
+  }
 
   const bulkMap = new Map<string, BulkProductionItem>();
 
@@ -292,20 +314,32 @@ export async function getProductionSummary(
     }
 
     for (const side of row.bulk_order?.items?.sides ?? []) {
+      const storedCategory = bulkCategories.get(side.id);
+      const category =
+        storedCategory === "starch"
+          ? "Starches"
+          : "Vegetables";
+
       addBulkItem({
         key: "side:" + side.id + ":" + side.unitLabel,
         itemId: side.id,
         name: side.name,
-        category: "Sides",
+        category,
         unitLabel: side.unitLabel,
         quantity: 1,
       });
     }
   }
 
+  const bulkCategoryOrder: Record<BulkProductionItem["category"], number> = {
+    Proteins: 0,
+    Vegetables: 1,
+    Starches: 2,
+  };
+
   const bulkItems = Array.from(bulkMap.values()).sort((left, right) => {
     if (left.category !== right.category) {
-      return left.category === "Proteins" ? -1 : 1;
+      return bulkCategoryOrder[left.category] - bulkCategoryOrder[right.category];
     }
 
     if (right.quantity !== left.quantity) {
