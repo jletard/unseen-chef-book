@@ -87,6 +87,13 @@ export default function IngredientReviewWorkspace({
   const [newChildByParent, setNewChildByParent] = useState<Record<string, string>>({});
   const [aiChildrenByParent, setAiChildrenByParent] = useState<Record<string, AIChildIngredient[]>>({});
 
+  const normalizedQuery = query.trim().toLowerCase();
+  const shownDrafts = Object.values(drafts).filter((draft) =>
+    !normalizedQuery
+      || draft.name.toLowerCase().includes(normalizedQuery)
+      || draft.labelName.toLowerCase().includes(normalizedQuery),
+  );
+
   function aiSchemaFor(draft: Draft): SecretAIFormSchema {
     return {
       name: `Ingredient review: ${draft.name}`,
