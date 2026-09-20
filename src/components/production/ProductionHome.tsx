@@ -125,32 +125,59 @@ export default function ProductionHome() {
               </Link>
             </div>
 
-            <div className="mt-3 border border-zinc-800 bg-zinc-950">
-              {weeklyItems.length === 0 && bulkItems.length === 0 ? (
-                <div className="p-5 text-sm text-zinc-500">No confirmed production for this week.</div>
-              ) : (
-                <div className="divide-y divide-zinc-800">
-                  {weeklyItems.slice(0, 12).map((item) => (
-                    <div key={item.key} className="flex items-center justify-between gap-4 px-4 py-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium">{item.name}</div>
-                        <div className="mt-0.5 text-xs text-zinc-600">{item.category}</div>
+            {weeklyItems.length === 0 && bulkItems.length === 0 ? (
+              <div className="mt-3 border border-dashed border-zinc-700 p-5 text-sm text-zinc-500">
+                No confirmed production for this week.
+              </div>
+            ) : (
+              <div className="mt-3 grid gap-4 xl:grid-cols-2">
+                <section className="border border-zinc-800 bg-zinc-950">
+                  <div className="border-b border-zinc-800 px-4 py-3">
+                    <h3 className="font-semibold">Weekly Menu</h3>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      {weeklyItems.length} items
+                    </p>
+                  </div>
+                  <div className="divide-y divide-zinc-800">
+                    {weeklyItems.map((item) => (
+                      <div key={item.key} className="flex items-center justify-between gap-4 px-4 py-3">
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{item.name}</div>
+                          <div className="mt-0.5 text-xs text-zinc-600">{item.category}</div>
+                        </div>
+                        <div className="shrink-0 text-xl font-bold">× {item.quantity}</div>
                       </div>
-                      <div className="shrink-0 text-xl font-bold">× {item.quantity}</div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="border border-zinc-800 bg-zinc-950">
+                  <div className="border-b border-zinc-800 px-4 py-3">
+                    <h3 className="font-semibold">Bulk Meal Prep</h3>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      {bulkItems.length} items
+                    </p>
+                  </div>
+                  {bulkItems.length ? (
+                    <div className="divide-y divide-zinc-800">
+                      {bulkItems.map((item) => (
+                        <div key={item.key} className="flex items-center justify-between gap-4 px-4 py-3">
+                          <div className="min-w-0">
+                            <div className="truncate font-medium">{item.name}</div>
+                            <div className="mt-0.5 text-xs text-zinc-600">
+                              {item.category} · {item.unitLabel}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-xl font-bold">× {item.quantity}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                  {bulkItems.slice(0, Math.max(0, 12 - weeklyItems.length)).map((item) => (
-                    <div key={item.key} className="flex items-center justify-between gap-4 px-4 py-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium">{item.name}</div>
-                        <div className="mt-0.5 text-xs text-zinc-600">Bulk · {item.unitLabel}</div>
-                      </div>
-                      <div className="shrink-0 text-xl font-bold">× {item.quantity}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  ) : (
+                    <div className="p-4 text-sm text-zinc-500">No bulk items this week.</div>
+                  )}
+                </section>
+              </div>
+            )}
           </section>
         </>
       ) : null}
