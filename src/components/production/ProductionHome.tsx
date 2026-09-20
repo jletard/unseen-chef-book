@@ -113,20 +113,20 @@ export default function ProductionHome() {
                 No confirmed production for this week.
               </div>
             ) : (
-              <div className="mt-2 grid gap-2 xl:grid-cols-2">
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
                 <section className="border border-zinc-800 bg-zinc-950">
                   <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1.5">
                     <h3 className="font-semibold">Weekly Menu</h3>
-                    <p className="text-[11px] text-zinc-600">
+                    <p className="text-[10px] leading-3 text-zinc-600">
                       {weeklyItems.length} items
                     </p>
                   </div>
                   <div className="divide-y divide-zinc-800">
                     {weeklyItems.map((item) => (
-                      <div key={item.key} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+                      <div key={item.key} className="flex items-start justify-between gap-2 px-3 py-1 text-sm">
                         <div className="min-w-0">
                           <div className="font-medium leading-tight">{item.name}</div>
-                          <div className="text-[11px] text-zinc-600">{item.category}</div>
+                          <div className="text-[10px] leading-3 text-zinc-600">{item.category}</div>
                         </div>
                         <div className="shrink-0 text-sm font-bold">× {item.quantity}</div>
                       </div>
@@ -144,10 +144,10 @@ export default function ProductionHome() {
                   {bulkItems.length ? (
                     <div className="divide-y divide-zinc-800">
                       {bulkItems.map((item) => (
-                        <div key={item.key} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+                        <div key={item.key} className="flex items-start justify-between gap-2 px-3 py-1 text-sm">
                           <div className="min-w-0">
                             <div className="font-medium leading-tight">{item.name}</div>
-                            <div className="text-[11px] text-zinc-600">
+                            <div className="text-[10px] leading-3 text-zinc-600">
                               {item.category} · {item.unitLabel}
                             </div>
                           </div>
