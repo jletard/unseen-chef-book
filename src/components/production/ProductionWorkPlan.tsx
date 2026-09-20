@@ -3,7 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useProductionWeek } from "@/components/page/ProductionWeekProvider";
-import type { ProductionWorkTask } from "@/lib/production-work-data";
+type ProductionWorkTask = {
+  id: string;
+  productionWeek: string;
+  workDate: string;
+  taskKey: string;
+  category: string;
+  label: string;
+  quantity: number | null;
+  unit: string | null;
+  status: "planned" | "in_progress" | "complete";
+  sourceType: "manual" | "generated";
+  notes: string | null;
+  sortOrder: number;
+};
 
 const categoryOrder = [
   "Proteins",
