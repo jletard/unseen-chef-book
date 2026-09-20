@@ -77,6 +77,8 @@ export type ProductionItem = {
   category: string;
   quantity: number;
   sideRequirements: SideRequirement[];
+  recipeId: string | null;
+  photoUrl: string | null;
 };
 
 export type BulkProductionItem = {
@@ -86,6 +88,8 @@ export type BulkProductionItem = {
   category: "Proteins" | "Vegetables" | "Starches";
   unitLabel: string;
   quantity: number;
+  recipeId: string | null;
+  photoUrl: string | null;
 };
 
 export type ProductionSummary = {
