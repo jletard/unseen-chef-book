@@ -140,6 +140,14 @@ export default function IngredientReviewWorkspace({
     setMessage("");
     try {
       if (parent.ingredientKind !== "compound") {
+        const parentUpdate = { ...parent, ingredientKind: "compound", confirmed: false };
+        const parentResponse = await fetch("/api/ingredients/review/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ updates: [parentUpdate] }),
+        });
+        const parentResult = await parentResponse.json() as { error?: string };
+        if (!parentResponse.ok) throw new Error(parentResult.error ?? "Could not make ingredient compound.");
         patchDraft(parentId, { ingredientKind: "compound" });
       }
 
