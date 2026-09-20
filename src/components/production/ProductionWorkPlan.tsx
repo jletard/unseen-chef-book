@@ -145,23 +145,17 @@ export default function ProductionWorkPlan() {
   }
 
   return (
-    <section className="mt-7">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">
-          The actual work
-        </p>
-        <h2 className="mt-1 text-2xl font-bold">Kitchen day</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-          Work grouped the way the kitchen is attacked: what can be done ahead,
-          what gets cooked together, and what is left for packaging day.
-        </p>
+    <section className="mt-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-base font-bold">Kitchen day</h2>
+        <span className="text-[11px] text-zinc-600">tap a box when finished</span>
       </div>
 
       {error ? (
         <p className="mt-3 text-sm text-red-300">{error}</p>
       ) : null}
 
-      <div className="mt-4 space-y-5">
+      <div className="mt-2 space-y-2">
         {days.map(([date, dayTasks]) => {
           const completeCount = dayTasks.filter(
             (task) => task.status === "complete",
@@ -186,12 +180,10 @@ export default function ProductionWorkPlan() {
 
           return (
             <article key={date} className="border border-zinc-800 bg-zinc-950">
-              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-1.5">
                 <div>
-                  <h3 className="text-lg font-bold">{formatDay(date)}</h3>
-                  <div className="mt-0.5 text-xs text-zinc-500">
-                    {completeCount} of {dayTasks.length} complete
-                  </div>
+                  <h3 className="text-sm font-bold">{formatDay(date)}</h3>
+                  <div className="text-[11px] text-zinc-600">{completeCount}/{dayTasks.length} complete</div>
                 </div>
                 {completeCount === dayTasks.length ? (
                   <span className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
@@ -204,13 +196,13 @@ export default function ProductionWorkPlan() {
                 {[...categories, ...extraCategories].map((group) => (
                   <section
                     key={group.category}
-                    className="grid gap-2 px-4 py-4 lg:grid-cols-[190px_1fr]"
+                    className="grid gap-1 px-3 py-2 lg:grid-cols-[145px_1fr]"
                   >
-                    <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    <div className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
                       {group.category}
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                       {group.tasks.map((task) => {
                         const qty = quantityText(task);
                         const done = task.status === "complete";
@@ -219,7 +211,7 @@ export default function ProductionWorkPlan() {
                           <div
                             key={task.id}
                             className={[
-                              "flex items-start gap-3 border border-zinc-800 px-3 py-3",
+                              "flex items-start gap-2 border border-zinc-800 px-2 py-1.5 text-sm",
                               done ? "bg-zinc-900/40" : "bg-zinc-950",
                             ].join(" ")}
                           >
@@ -233,7 +225,7 @@ export default function ProductionWorkPlan() {
                                 )
                               }
                               className={[
-                                "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center border text-xs font-bold",
+                                "flex h-5 w-5 shrink-0 items-center justify-center border text-[10px] font-bold",
                                 done
                                   ? "border-emerald-700 bg-emerald-950 text-emerald-300"
                                   : "border-zinc-700 text-zinc-700 hover:border-zinc-500",
@@ -256,13 +248,13 @@ export default function ProductionWorkPlan() {
                               >
                                 {task.label}
                                 {qty ? (
-                                  <span className="ml-2 text-sm font-normal text-zinc-400">
+                                  <span className="ml-1 text-xs font-normal text-zinc-400">
                                     · {qty}
                                   </span>
                                 ) : null}
                               </div>
                               {task.notes ? (
-                                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                <p className="text-[11px] leading-4 text-zinc-600">
                                   {task.notes}
                                 </p>
                               ) : null}
