@@ -200,7 +200,7 @@ export default function IngredientReviewWorkspace({
             if (typeof child !== "object" || child === null || Array.isArray(child)) return [];
             const childRow = child as Record<string, unknown>;
             const childName = typeof childRow.name === "string" ? childRow.name.trim() : "";
-            const measurementKind =
+            const measurementKind: AIChildIngredient["measurementKind"] =
               childRow.measurementKind === "liquid" || childRow.measurementKind === "countable"
                 ? childRow.measurementKind
                 : "solid";
