@@ -44,6 +44,7 @@ export default function IngredientCatalog({
   const [editExcludeFromShopping, setEditExcludeFromShopping] = useState(false);
   const [newChildId, setNewChildId] = useState("");
   const [newChildSourceText, setNewChildSourceText] = useState("");
+  const [selectedReviewIds, setSelectedReviewIds] = useState<Set<string>>(() => new Set());
 
   const componentsByParent = useMemo(() => {
     const map = new Map<string, IngredientComponentRecord[]>();
@@ -79,6 +80,52 @@ export default function IngredientCatalog({
 
   const compoundCount = ingredients.filter((ingredient) => ingredient.ingredientKind === "compound").length;
   const needsReviewCount = ingredients.filter(needsReview).length;
+  const shownReviewableIds = shownIngredients.filter(needsReview).map((ingredient) => ingredient.id);
+  const allShownReviewableSelected =
+    shownReviewableIds.length > 0 && shownReviewableIds.every((id) => selectedReviewIds.has(id));
+
+  function toggleReviewSelection(id: string) {
+    setSelectedReviewIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllShownReviewable() {
+    setSelectedReviewIds((current) => {
+      const next = new Set(current);
+      if (allShownReviewableSelected) {
+        shownReviewableIds.forEach((id) => next.delete(id));
+      } else {
+        shownReviewableIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
+
+  async function confirmSelectedReviews() {
+    const ids = Array.from(selectedReviewIds);
+    if (ids.length === 0) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/ingredients/labeling/confirm-bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Bulk review failed.");
+      setSelectedReviewIds(new Set());
+      router.refresh();
+    } catch (reviewError) {
+      setError(reviewError instanceof Error ? reviewError.message : "Bulk review failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function createIngredient() {
     if (!name.trim()) return;
@@ -275,6 +322,30 @@ export default function IngredientCatalog({
         <div className="self-center text-sm text-zinc-400">{shownIngredients.length} shown</div>
       </section>
 
+      {filter === "needs_review" && shownReviewableIds.length > 0 && (
+        <section className="flex flex-wrap items-center justify-between gap-3 border border-amber-900 bg-amber-950/20 p-3">
+          <label className="flex items-center gap-2 text-sm text-zinc-200">
+            <input
+              type="checkbox"
+              checked={allShownReviewableSelected}
+              onChange={toggleAllShownReviewable}
+            />
+            Select all {shownReviewableIds.length} shown
+          </label>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-zinc-400">{selectedReviewIds.size} selected</span>
+            <button
+              type="button"
+              onClick={confirmSelectedReviews}
+              disabled={busy || selectedReviewIds.size === 0}
+              className="border border-emerald-700 px-4 py-2 text-sm font-medium text-emerald-300 disabled:opacity-40"
+            >
+              {busy ? "Confirming..." : "Mark Selected Reviewed"}
+            </button>
+          </div>
+        </section>
+      )}
+
       {error && <p className="border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</p>}
 
       <div className="space-y-2">
@@ -290,6 +361,15 @@ export default function IngredientCatalog({
           if (!isEditing) {
             return (
               <div key={ingredient.id} className="flex min-w-0 flex-wrap items-center gap-3 border border-zinc-800 bg-zinc-950 px-4 py-3">
+                {reviewNeeded && filter === "needs_review" && (
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${ingredient.name} for review confirmation`}
+                    checked={selectedReviewIds.has(ingredient.id)}
+                    onChange={() => toggleReviewSelection(ingredient.id)}
+                    className="shrink-0"
+                  />
+                )}
                 <button type="button" title="Edit ingredient" onClick={() => beginEdit(ingredient)} className="shrink-0 border border-zinc-600 px-2 py-1">✎</button>
                 <span className="min-w-0 flex-1 font-medium">{ingredient.name}</span>
                 {ingredient.ingredientKind === "compound" && (
