@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useProductionWeek } from "@/components/page/ProductionWeekProvider";
-import ProductionWorkPlan from "@/components/production/ProductionWorkPlan";
+import ProductionRecipeModal from "@/components/production/ProductionRecipeModal";
 import type { ProductionSummary } from "@/types/cookbook-data";
 
 function formatWeek(value: string) {
@@ -20,6 +20,11 @@ export default function ProductionHome() {
   const [summary, setSummary] = useState<ProductionSummary | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [recipeTarget, setRecipeTarget] = useState<{
+    name: string;
+    recipeId: string | null;
+    photoUrl: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -92,10 +97,21 @@ export default function ProductionHome() {
                   </div>
                   <div className="divide-y divide-zinc-800 border-b border-zinc-800">
                     {weeklyItems.map((item) => (
-                      <div key={item.key} className="flex items-start justify-between gap-2 px-2 py-0.5 text-xs sm:text-sm">
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() =>
+                          setRecipeTarget({
+                            name: item.name,
+                            recipeId: item.recipeId,
+                            photoUrl: item.photoUrl,
+                          })
+                        }
+                        className="flex w-full items-start justify-between gap-2 px-2 py-0.5 text-left text-xs hover:bg-zinc-900 focus:bg-zinc-900 sm:text-sm"
+                      >
                         <div className="min-w-0 font-medium leading-tight">{item.name}</div>
                         <div className="shrink-0 font-bold">×{item.quantity}</div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </section>
@@ -108,12 +124,23 @@ export default function ProductionHome() {
                   {bulkItems.length ? (
                     <div className="divide-y divide-zinc-800">
                       {bulkItems.map((item) => (
-                        <div key={item.key} className="flex items-start justify-between gap-2 px-2 py-0.5 text-xs sm:text-sm">
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() =>
+                            setRecipeTarget({
+                              name: item.name,
+                              recipeId: item.recipeId,
+                              photoUrl: item.photoUrl,
+                            })
+                          }
+                          className="flex w-full items-start justify-between gap-2 px-2 py-0.5 text-left text-xs hover:bg-zinc-900 focus:bg-zinc-900 sm:text-sm"
+                        >
                           <div className="min-w-0 font-medium leading-tight">{item.name}</div>
                           <div className="shrink-0 whitespace-nowrap font-bold">
                             ×{item.quantity} <span className="font-normal text-zinc-400">{item.unitLabel}</span>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   ) : (
@@ -125,6 +152,10 @@ export default function ProductionHome() {
           </section>
         </>
       ) : null}
+      <ProductionRecipeModal
+        target={recipeTarget}
+        onClose={() => setRecipeTarget(null)}
+      />
     </div>
   );
 }
