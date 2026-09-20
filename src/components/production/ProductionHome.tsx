@@ -15,14 +15,6 @@ function formatWeek(value: string) {
   }).format(new Date(value + "T12:00:00"));
 }
 
-const actions = [
-  { href: "/production/list", title: "Production Totals", detail: "What we are making and how many." },
-  { href: "/production/prep", title: "Prep List", detail: "Turn production into actual kitchen work." },
-  { href: "/cook/this-week", title: "Scaled Recipes", detail: "The recipes needed for this production week." },
-  { href: "/production/shopping", title: "Shopping", detail: "What needs to be bought before cooking starts." },
-  { href: "/production/labels", title: "Labels", detail: "Print the food labels after the cooking is done." },
-];
-
 export default function ProductionHome() {
   const { productionWeek } = useProductionWeek();
   const [summary, setSummary] = useState<ProductionSummary | null>(null);
@@ -84,27 +76,14 @@ export default function ProductionHome() {
             <span><b className="text-zinc-100">{distinctFoodItems}</b> <span className="text-zinc-500">things to make</span></span>
           </section>
 
-          <section className="mt-2 flex gap-1 overflow-x-auto pb-1">
-            {actions.map((action) => (
-              <Link
-                key={action.href}
-                href={action.href}
-                title={action.detail}
-                className="shrink-0 border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs font-medium hover:border-zinc-600 hover:bg-zinc-900"
-              >
-                {action.title}
-              </Link>
-            ))}
-          </section>
 
           <section className="mt-3">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-base font-bold">This week</h2>
-                <p className="text-xs text-zinc-600">Weekly menu + bulk production</p>
-              </div>
-              <Link href="/production/list" className="text-sm text-blue-300 hover:underline">
-                Full production totals →
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold">
+                This week <span className="font-normal text-zinc-600">· weekly menu + bulk</span>
+              </h2>
+              <Link href="/production/list" className="shrink-0 text-xs text-blue-300 hover:underline">
+                Totals →
               </Link>
             </div>
 
@@ -113,9 +92,9 @@ export default function ProductionHome() {
                 No confirmed production for this week.
               </div>
             ) : (
-              <div className="mt-2 grid gap-2 md:grid-cols-2">
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <section className="border border-zinc-800 bg-zinc-950">
-                  <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1.5">
+                  <div className="flex items-center justify-between border-b border-zinc-800 px-2.5 py-1">
                     <h3 className="font-semibold">Weekly Menu</h3>
                     <p className="text-[10px] leading-3 text-zinc-600">
                       {weeklyItems.length} items
@@ -123,12 +102,12 @@ export default function ProductionHome() {
                   </div>
                   <div className="divide-y divide-zinc-800">
                     {weeklyItems.map((item) => (
-                      <div key={item.key} className="flex items-start justify-between gap-2 px-3 py-1 text-sm">
-                        <div className="min-w-0">
-                          <div className="font-medium leading-tight">{item.name}</div>
-                          <div className="text-[10px] leading-3 text-zinc-600">{item.category}</div>
+                      <div key={item.key} className="flex items-start justify-between gap-2 px-2.5 py-1 text-xs sm:text-sm">
+                        <div className="min-w-0 leading-tight">
+                          <span className="font-medium">{item.name}</span>
+                          <span className="ml-1.5 text-[10px] text-zinc-600">{item.category}</span>
                         </div>
-                        <div className="shrink-0 text-sm font-bold">× {item.quantity}</div>
+                        <div className="shrink-0 text-sm font-bold">×{item.quantity}</div>
                       </div>
                     ))}
                   </div>
@@ -144,14 +123,14 @@ export default function ProductionHome() {
                   {bulkItems.length ? (
                     <div className="divide-y divide-zinc-800">
                       {bulkItems.map((item) => (
-                        <div key={item.key} className="flex items-start justify-between gap-2 px-3 py-1 text-sm">
-                          <div className="min-w-0">
-                            <div className="font-medium leading-tight">{item.name}</div>
-                            <div className="text-[10px] leading-3 text-zinc-600">
+                        <div key={item.key} className="flex items-start justify-between gap-2 px-2.5 py-1 text-xs sm:text-sm">
+                          <div className="min-w-0 leading-tight">
+                            <span className="font-medium">{item.name}</span>
+                            <span className="ml-1.5 text-[10px] text-zinc-600">
                               {item.category} · {item.unitLabel}
-                            </div>
+                            </span>
                           </div>
-                          <div className="shrink-0 text-sm font-bold">× {item.quantity}</div>
+                          <div className="shrink-0 text-sm font-bold">×{item.quantity}</div>
                         </div>
                       ))}
                     </div>
