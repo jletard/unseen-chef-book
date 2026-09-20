@@ -5,7 +5,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { navigationSections } from "./navigation";
+import { navigationSections, sectionMatchesPath } from "./navigation";
 
 export default function PrimaryTabs() {
   const pathname = usePathname();
@@ -18,7 +18,7 @@ export default function PrimaryTabs() {
     >
       <div className="mx-auto flex w-full max-w-screen-2xl snap-x overflow-x-auto px-1 md:px-4">
         {navigationSections.map((section) => {
-          const isActive = pathname.startsWith(section.matchPath);
+          const isActive = sectionMatchesPath(section, pathname);
 
           return (
             <Link
