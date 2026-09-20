@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import SecretAIImportBox, { type SecretAIFormSchema } from "@/components/SecretAIImportBox/SecretAIImportBox";
 import { allergenLabels, type AllergenKey, type LabelIngredient } from "@/lib/labeling-types";
 import type {
   IngredientComponentRecord,
@@ -11,6 +12,11 @@ import type {
 } from "@/types/cookbook-data";
 
 const allergenEntries = Object.entries(allergenLabels) as Array<[AllergenKey, string]>;
+
+type AIChildIngredient = {
+  name: string;
+  measurementKind: IngredientRecord["measurementKind"];
+};
 
 type Draft = {
   id: string;
@@ -79,6 +85,72 @@ export default function IngredientReviewWorkspace({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [newChildByParent, setNewChildByParent] = useState<Record<string, string>>({});
+  const [aiChildrenByParent, setAiChildrenByParent] = useState<Record<string, AIChildIngredient[]>>({});
+
+  const aiSchema = useMemo<SecretAIFormSchema>(() => ({
+    name: "Ingredient review batch",
+    description:
+      "Review every listed purchased ingredient. For a true single ingredient such as fresh ginger, keep it simple and use the ingredient itself as the declaration. For packaged or compound foods such as graham cracker crumbs or Greek yogurt, fill in a useful ingredient declaration, mark it compound, identify major allergens, and list the child ingredients that should exist in the cookbook. Use common culinary knowledge when the product is generic; the chef will review before saving. Do not add products that are not in the supplied list.",
+    fields: {
+      reviews: {
+        type: "array",
+        required: true,
+        items: {
+          type: "object",
+          fields: {
+            name: {
+              type: "string",
+              required: true,
+              description: "Must exactly match one supplied ingredient name.",
+            },
+            labelName: { type: "string", required: true },
+            ingredientKind: {
+              type: "enum",
+              required: true,
+              values: ["simple", "compound"],
+            },
+            measurementKind: {
+              type: "enum",
+              required: true,
+              values: ["solid", "liquid", "countable"],
+            },
+            ingredientStatement: {
+              type: "string",
+              required: true,
+              description:
+                "Consumer ingredient declaration. For a simple ingredient, normally just the ingredient name. For a compound product, provide the ingredient list in label-ready wording.",
+            },
+            allergenKeys: {
+              type: "array",
+              required: true,
+              items: {
+                type: "enum",
+                values: Object.keys(allergenLabels),
+              },
+            },
+            vegetarian: { type: "boolean", required: true },
+            childIngredients: {
+              type: "array",
+              required: true,
+              description:
+                "For compound products, list the purchased ingredient's constituent ingredients that should be linked as structured child ingredients. Leave empty for simple ingredients.",
+              items: {
+                type: "object",
+                fields: {
+                  name: { type: "string", required: true },
+                  measurementKind: {
+                    type: "enum",
+                    required: true,
+                    values: ["solid", "liquid", "countable"],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  }), []);
 
   const normalizedQuery = query.trim().toLowerCase();
   const shownDrafts = Object.values(drafts).filter((draft) =>
@@ -86,6 +158,76 @@ export default function IngredientReviewWorkspace({
       || draft.name.toLowerCase().includes(normalizedQuery)
       || draft.labelName.toLowerCase().includes(normalizedQuery),
   );
+
+  const aiCurrentValues = useMemo(() => ({
+    reviews: Object.values(drafts).map((draft) => ({
+      name: draft.name,
+      labelName: draft.labelName,
+      ingredientKind: draft.ingredientKind,
+      measurementKind: draft.measurementKind,
+      ingredientStatement: draft.ingredientStatement,
+      allergenKeys: draft.allergenKeys,
+      vegetarian: draft.dietaryFlags.includes("vegetarian"),
+      childIngredients: (componentsByParent.get(draft.id) ?? []).map((row) => {
+        const child = ingredientById.get(row.childIngredientId);
+        return {
+          name: child?.name ?? "Unknown ingredient",
+          measurementKind: child?.measurementKind ?? "solid",
+        };
+      }),
+    })),
+  }), [componentsByParent, drafts, ingredientById]);
+
+  function importAI(values: Record<string, unknown>) {
+    const reviews = Array.isArray(values.reviews) ? values.reviews : [];
+    const byName = new Map(
+      Object.values(drafts).map((draft) => [draft.name.trim().toLowerCase(), draft.id]),
+    );
+    let importedCount = 0;
+
+    for (const review of reviews) {
+      if (typeof review !== "object" || review === null || Array.isArray(review)) continue;
+      const row = review as Record<string, unknown>;
+      const name = typeof row.name === "string" ? row.name.trim() : "";
+      const id = byName.get(name.toLowerCase());
+      if (!id) continue;
+
+      const allergens = Array.isArray(row.allergenKeys)
+        ? row.allergenKeys.filter((key): key is AllergenKey => typeof key === "string" && key in allergenLabels)
+        : [];
+      const children = Array.isArray(row.childIngredients)
+        ? row.childIngredients.flatMap((child) => {
+            if (typeof child !== "object" || child === null || Array.isArray(child)) return [];
+            const childRow = child as Record<string, unknown>;
+            const childName = typeof childRow.name === "string" ? childRow.name.trim() : "";
+            const measurementKind =
+              childRow.measurementKind === "liquid" || childRow.measurementKind === "countable"
+                ? childRow.measurementKind
+                : "solid";
+            return childName ? [{ name: childName, measurementKind }] : [];
+          })
+        : [];
+
+      patchDraft(id, {
+        labelName: typeof row.labelName === "string" ? row.labelName : drafts[id].labelName,
+        ingredientKind: row.ingredientKind === "compound" ? "compound" : "simple",
+        measurementKind:
+          row.measurementKind === "liquid" || row.measurementKind === "countable"
+            ? row.measurementKind
+            : "solid",
+        ingredientStatement:
+          typeof row.ingredientStatement === "string"
+            ? row.ingredientStatement
+            : drafts[id].ingredientStatement,
+        allergenKeys: allergens,
+        dietaryFlags: row.vegetarian === true ? ["vegetarian"] : [],
+      });
+      setAiChildrenByParent((current) => ({ ...current, [id]: children }));
+      importedCount += 1;
+    }
+
+    setMessage(`AI filled ${importedCount} ingredient review cards. Nothing has been saved yet.`);
+  }
 
   function patchDraft(id: string, patch: Partial<Draft>) {
     setDrafts((current) => ({
@@ -100,6 +242,58 @@ export default function IngredientReviewWorkspace({
       ? draft.allergenKeys.filter((value) => value !== key)
       : [...draft.allergenKeys, key];
     patchDraft(id, { allergenKeys: next });
+  }
+
+  async function persistSuggestedChildren(targetDrafts: Draft[]) {
+    const resolvedByName = new Map(
+      ingredients.map((ingredient) => [ingredient.name.trim().toLowerCase(), ingredient.id]),
+    );
+
+    for (const draft of targetDrafts) {
+      const suggestions = aiChildrenByParent[draft.id] ?? [];
+      if (suggestions.length === 0) continue;
+
+      const existingChildIds = new Set(
+        (componentsByParent.get(draft.id) ?? []).map((row) => row.childIngredientId),
+      );
+
+      for (const child of suggestions) {
+        const key = child.name.trim().toLowerCase();
+        if (!key) continue;
+
+        let childId = resolvedByName.get(key);
+        if (!childId) {
+          const createResponse = await fetch("/api/ingredients", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: child.name,
+              measurementKind: child.measurementKind,
+              ingredientKind: "simple",
+            }),
+          });
+          const created = await createResponse.json() as { id?: string; error?: string };
+          if (!createResponse.ok || !created.id) {
+            throw new Error(created.error ?? `Could not create child ingredient ${child.name}.`);
+          }
+          childId = created.id;
+          resolvedByName.set(key, childId);
+        }
+
+        if (existingChildIds.has(childId)) continue;
+
+        const relationResponse = await fetch(`/api/ingredients/${draft.id}/components`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ childIngredientId: childId, sourceText: child.name }),
+        });
+        const relation = await relationResponse.json() as { error?: string };
+        if (!relationResponse.ok && relationResponse.status !== 409) {
+          throw new Error(relation.error ?? `Could not add ${child.name} to ${draft.name}.`);
+        }
+        existingChildIds.add(childId);
+      }
+    }
   }
 
   async function saveAll() {
@@ -117,7 +311,9 @@ export default function IngredientReviewWorkspace({
       const result = await response.json() as { savedCount?: number; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Bulk review save failed.");
 
-      setMessage(`Saved and reviewed ${result.savedCount ?? shownDrafts.length} ingredients.`);
+      await persistSuggestedChildren(shownDrafts);
+
+      setMessage(`Saved and reviewed ${result.savedCount ?? shownDrafts.length} ingredients, including AI-suggested child ingredients.`);
       setDrafts((current) => {
         const next = { ...current };
         shownDrafts.forEach((draft) => delete next[draft.id]);
@@ -208,6 +404,14 @@ export default function IngredientReviewWorkspace({
           {busy ? "Saving…" : "Save all shown & mark reviewed"}
         </button>
       </div>
+
+      <SecretAIImportBox
+        formSchema={aiSchema}
+        currentValues={aiCurrentValues}
+        onImport={importAI}
+        successMessage="AI review data loaded into the open ingredient cards."
+        disabled={busy || Object.keys(drafts).length === 0}
+      />
 
       {message && <div className="border border-zinc-700 bg-zinc-950 p-3 text-sm text-zinc-300">{message}</div>}
 
@@ -303,7 +507,7 @@ export default function IngredientReviewWorkspace({
               Vegetarian
             </label>
 
-            {draft.ingredientKind === "compound" && (
+            {(draft.ingredientKind === "compound" || (aiChildrenByParent[draft.id]?.length ?? 0) > 0) && (
               <div className="mt-4 border-t border-zinc-800 pt-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -314,6 +518,20 @@ export default function IngredientReviewWorkspace({
                   </div>
                   {childRows.length === 0 && <span className="text-sm text-amber-300">No child ingredients yet</span>}
                 </div>
+
+                {(aiChildrenByParent[draft.id]?.length ?? 0) > 0 && (
+                  <div className="mb-3 border border-purple-900/70 bg-purple-950/20 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-purple-300">AI suggested children</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(aiChildrenByParent[draft.id] ?? []).map((child, index) => (
+                        <span key={`${child.name}-${index}`} className="border border-purple-800 px-2 py-1 text-xs text-purple-200">
+                          {child.name}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs text-zinc-500">These will be linked when you save all shown. Missing child ingredients will be created automatically.</p>
+                  </div>
+                )}
 
                 <div className="mt-3 space-y-2">
                   {childRows.map((row) => (
