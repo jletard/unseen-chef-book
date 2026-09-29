@@ -14,7 +14,7 @@ export default async function CookbookRecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const recipe = await getApprovedRecipeEditorData(id);
+  const recipe = await getApprovedRecipeEditorData(id, { includeOptions: false });
 
   if (!recipe) notFound();
 

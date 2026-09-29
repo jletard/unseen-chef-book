@@ -219,30 +219,62 @@ export async function getRecipeById(
 export async function getRecipeItems(
   recipeId: string,
 ): Promise<import("@/types/cookbook-data").RecipeItemRecord[]> {
-  const [{ data, error }, ingredients, recipes] = await Promise.all([
-    supabaseAdmin
-      .from("recipe_items")
-      .select(
-        "id, recipe_id, item_type, ingredient_id, component_recipe_id, quantity, unit, preparation_note, sort_order",
-      )
-      .eq("recipe_id", recipeId)
-      .order("sort_order", { ascending: true }),
-    getIngredients(),
-    getRecipes(),
-  ]);
+  const { data, error } = await supabaseAdmin
+    .from("recipe_items")
+    .select(
+      "id, recipe_id, item_type, ingredient_id, component_recipe_id, quantity, unit, preparation_note, sort_order",
+    )
+    .eq("recipe_id", recipeId)
+    .order("sort_order", { ascending: true });
 
   if (error) {
     throw new Error("Failed to load recipe items: " + error.message);
   }
 
-  const ingredientNames = new Map(
-    ingredients.map((ingredient) => [ingredient.id, ingredient.name]),
+  const rows = (data ?? []) as RecipeItemRow[];
+  const ingredientIds = Array.from(
+    new Set(
+      rows
+        .map((row) => row.ingredient_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
   );
-  const recipeNames = new Map(
-    recipes.map((recipe) => [recipe.id, recipe.name]),
+  const componentRecipeIds = Array.from(
+    new Set(
+      rows
+        .map((row) => row.component_recipe_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
   );
 
-  return ((data ?? []) as RecipeItemRow[]).map((row) => ({
+  const [ingredientResult, recipeResult] = await Promise.all([
+    ingredientIds.length
+      ? supabaseAdmin.from("ingredients").select("id, name").in("id", ingredientIds)
+      : Promise.resolve({ data: [], error: null }),
+    componentRecipeIds.length
+      ? supabaseAdmin.from("recipes").select("id, name").in("id", componentRecipeIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const lookupError = ingredientResult.error ?? recipeResult.error;
+  if (lookupError) {
+    throw new Error("Failed to load recipe item names: " + lookupError.message);
+  }
+
+  const ingredientNames = new Map(
+    (ingredientResult.data ?? []).map((ingredient) => [
+      String(ingredient.id),
+      String(ingredient.name),
+    ]),
+  );
+  const recipeNames = new Map(
+    (recipeResult.data ?? []).map((recipe) => [
+      String(recipe.id),
+      String(recipe.name),
+    ]),
+  );
+
+  return rows.map((row) => ({
     id: row.id,
     recipeId: row.recipe_id,
     itemType: row.item_type,
@@ -310,7 +342,9 @@ export type ApprovedRecipeEditorData = {
 
 export async function getApprovedRecipeEditorData(
   recipeId: string,
+  options: { includeOptions?: boolean } = {},
 ): Promise<ApprovedRecipeEditorData | null> {
+  const includeOptions = options.includeOptions ?? true;
   const { data: recipe, error: recipeError } = await supabaseAdmin
     .from("recipes")
     .select("id, name, recipe_type, current_approved_version_id")
@@ -323,14 +357,7 @@ export async function getApprovedRecipeEditorData(
   if (!recipe?.current_approved_version_id) return null;
 
   const versionId = String(recipe.current_approved_version_id);
-  const [
-    versionResult,
-    itemResult,
-    stepResult,
-    ingredientResult,
-    recipeOptionsResult,
-    versionOptionsResult,
-  ] = await Promise.all([
+  const [versionResult, itemResult, stepResult] = await Promise.all([
     supabaseAdmin
       .from("recipe_versions")
       .select("id, yield_kind, base_yield, yield_unit, minimum_batch_quantity, minimum_batch_unit, portion_quantity, portion_unit, chef_notes")
@@ -346,40 +373,89 @@ export async function getApprovedRecipeEditorData(
       .select("id, instruction, step_number")
       .eq("recipe_version_id", versionId)
       .order("step_number", { ascending: true }),
-    supabaseAdmin
-      .from("ingredients")
-      .select("id, name, measurement_kind")
-      .is("retired_at", null)
-      .order("name", { ascending: true }),
-    supabaseAdmin
-      .from("recipes")
-      .select("id, name, current_approved_version_id")
-      .is("retired_at", null)
-      .not("current_approved_version_id", "is", null)
-      .order("name", { ascending: true }),
-    supabaseAdmin
-      .from("recipe_versions")
-      .select("id, recipe_id"),
   ]);
 
-  const error =
-    versionResult.error ??
-    itemResult.error ??
-    stepResult.error ??
-    ingredientResult.error ??
-    recipeOptionsResult.error ??
-    versionOptionsResult.error;
-  if (error) throw new Error("Failed to load approved recipe: " + error.message);
+  const detailError = versionResult.error ?? itemResult.error ?? stepResult.error;
+  if (detailError) {
+    throw new Error("Failed to load approved recipe: " + detailError.message);
+  }
   if (!versionResult.data) return null;
+
+  const itemRows = itemResult.data ?? [];
+  const referencedIngredientIds = Array.from(
+    new Set(
+      itemRows
+        .map((row) => row.ingredient_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  const dependencyVersionIds = Array.from(
+    new Set(
+      itemRows
+        .map((row) => row.dependency_recipe_version_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  const [ingredientResult, dependencyVersionResult] = await Promise.all([
+    includeOptions
+      ? supabaseAdmin
+          .from("ingredients")
+          .select("id, name, measurement_kind")
+          .is("retired_at", null)
+          .order("name", { ascending: true })
+      : referencedIngredientIds.length
+        ? supabaseAdmin
+            .from("ingredients")
+            .select("id, name, measurement_kind")
+            .in("id", referencedIngredientIds)
+        : Promise.resolve({ data: [], error: null }),
+    dependencyVersionIds.length
+      ? supabaseAdmin
+          .from("recipe_versions")
+          .select("id, recipe_id")
+          .in("id", dependencyVersionIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const lookupError = ingredientResult.error ?? dependencyVersionResult.error;
+  if (lookupError) {
+    throw new Error("Failed to load approved recipe lookups: " + lookupError.message);
+  }
+
+  const recipeIdByVersionId = new Map(
+    (dependencyVersionResult.data ?? []).map((row) => [
+      String(row.id),
+      String(row.recipe_id),
+    ]),
+  );
+  const referencedRecipeIds = Array.from(new Set(recipeIdByVersionId.values()));
+
+  const recipeOptionsResult = includeOptions
+    ? await supabaseAdmin
+        .from("recipes")
+        .select("id, name, current_approved_version_id")
+        .is("retired_at", null)
+        .not("current_approved_version_id", "is", null)
+        .order("name", { ascending: true })
+    : referencedRecipeIds.length
+      ? await supabaseAdmin
+          .from("recipes")
+          .select("id, name, current_approved_version_id")
+          .in("id", referencedRecipeIds)
+      : { data: [], error: null };
+
+  if (recipeOptionsResult.error) {
+    throw new Error(
+      "Failed to load approved recipe components: " + recipeOptionsResult.error.message,
+    );
+  }
 
   const ingredientNameById = new Map(
     (ingredientResult.data ?? []).map((row) => [String(row.id), String(row.name)]),
   );
   const recipeNameById = new Map(
     (recipeOptionsResult.data ?? []).map((row) => [String(row.id), String(row.name)]),
-  );
-  const recipeIdByVersionId = new Map(
-    (versionOptionsResult.data ?? []).map((row) => [String(row.id), String(row.recipe_id)]),
   );
 
   return {
@@ -421,22 +497,26 @@ export async function getApprovedRecipeEditorData(
       id: String(row.id),
       instruction: String(row.instruction ?? ""),
     })),
-    ingredientOptions: (ingredientResult.data ?? []).map((row) => ({
-      id: String(row.id),
-      name: String(row.name),
-      measurementKind:
-        row.measurement_kind === "liquid"
-          ? "liquid"
-          : row.measurement_kind === "countable"
-            ? "countable"
-            : "solid",
-    })),
-    componentOptions: (recipeOptionsResult.data ?? [])
-      .filter((row) => String(row.id) !== recipeId && row.current_approved_version_id)
-      .map((row) => ({
-        id: String(row.id),
-        name: String(row.name),
-        currentApprovedVersionId: String(row.current_approved_version_id),
-      })),
+    ingredientOptions: includeOptions
+      ? (ingredientResult.data ?? []).map((row) => ({
+          id: String(row.id),
+          name: String(row.name),
+          measurementKind:
+            row.measurement_kind === "liquid"
+              ? "liquid"
+              : row.measurement_kind === "countable"
+                ? "countable"
+                : "solid",
+        }))
+      : [],
+    componentOptions: includeOptions
+      ? (recipeOptionsResult.data ?? [])
+          .filter((row) => String(row.id) !== recipeId && row.current_approved_version_id)
+          .map((row) => ({
+            id: String(row.id),
+            name: String(row.name),
+            currentApprovedVersionId: String(row.current_approved_version_id),
+          }))
+      : [],
   };
 }
