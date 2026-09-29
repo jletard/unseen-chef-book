@@ -175,7 +175,7 @@ export async function getProductionSummary(
   }
 
   const recipeBySource = new Map<string, string>(
-    (sourceRecipeRows ?? []).map((row) => [
+    (sourceRecipeRows ?? []).map((row: { source_type: string; source_id: string; recipe_id: string }) => [
       String(row.source_type) + ":" + String(row.source_id),
       String(row.recipe_id),
     ]),
