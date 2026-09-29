@@ -3,6 +3,7 @@
 
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import AppShell from "@/components/page/AppShell";
 import { chooseInitialProductionWeek } from "@/lib/production-weeks";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -17,6 +18,8 @@ type Props = {
 };
 
 export default async function ProtectedLayout({ children }: Props) {
+  await connection();
+
   const supabase = await createClient();
 
   const {
