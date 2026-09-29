@@ -163,48 +163,23 @@ export async function getProductionSummary(
     (dataset.menu_items ?? []).map((row) => [row.id, row]),
   );
 
-  const { data: sourceRows, error: sourceError } = await supabaseAdmin
-    .from("production_item_sources")
-    .select("production_item_id, source_type, source_id")
-    .eq("mapping_state", "confirmed")
-    .in("source_type", ["menu_item", "bulk_item"]);
+  const { data: sourceRecipeRows, error: sourceRecipeError } =
+    await supabaseAdmin.rpc("get_production_source_recipe_map", {
+      p_source_types: ["menu_item", "bulk_item"],
+    });
 
-  if (sourceError) {
-    throw new Error("Failed to load production recipe sources: " + sourceError.message);
+  if (sourceRecipeError) {
+    throw new Error(
+      "Failed to load production recipe sources: " + sourceRecipeError.message,
+    );
   }
 
-  const productionIds = Array.from(
-    new Set((sourceRows ?? []).map((row) => String(row.production_item_id))),
+  const recipeBySource = new Map<string, string>(
+    (sourceRecipeRows ?? []).map((row) => [
+      String(row.source_type) + ":" + String(row.source_id),
+      String(row.recipe_id),
+    ]),
   );
-  const recipeByProductionId = new Map<string, string>();
-
-  if (productionIds.length > 0) {
-    const { data: recipeLinkRows, error: recipeLinkError } = await supabaseAdmin
-      .from("production_item_recipe_links")
-      .select("production_item_id, recipe_id, role, sort_order")
-      .in("production_item_id", productionIds)
-      .eq("active", true)
-      .order("sort_order", { ascending: true });
-
-    if (recipeLinkError) {
-      throw new Error("Failed to load production recipe links: " + recipeLinkError.message);
-    }
-
-    for (const row of recipeLinkRows ?? []) {
-      const productionId = String(row.production_item_id);
-      if (!recipeByProductionId.has(productionId) || row.role === "main") {
-        recipeByProductionId.set(productionId, String(row.recipe_id));
-      }
-    }
-  }
-
-  const recipeBySource = new Map<string, string>();
-  for (const row of sourceRows ?? []) {
-    const recipeId = recipeByProductionId.get(String(row.production_item_id));
-    if (recipeId && row.source_id) {
-      recipeBySource.set(String(row.source_type) + ":" + String(row.source_id), recipeId);
-    }
-  }
 
   function publicMenuImage(path: string | null | undefined) {
     if (!path) return null;
