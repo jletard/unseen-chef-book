@@ -127,20 +127,29 @@ export async function getReferenceRecords(
 export async function getProductionSummary(
   productionWeek: string,
 ): Promise<ProductionSummary> {
-  const { data: ordersData, error: ordersError } = await supabaseAdmin
-    .from("orders")
-    .select("id, total_portions")
-    .eq("status", "confirmed")
-    .eq("production_week", productionWeek);
+  const { data: datasetData, error: datasetError } = await supabaseAdmin.rpc(
+    "get_production_week_dataset",
+    { p_production_week: productionWeek },
+  );
 
-  if (ordersError) {
-    throw new Error("Failed to load confirmed orders: " + ordersError.message);
+  if (datasetError) {
+    throw new Error(
+      "Failed to load production-week dataset: " + datasetError.message,
+    );
   }
 
-  const orders = (ordersData ?? []) as OrderRow[];
-  const orderIds = orders.map((order) => order.id);
+  const dataset = (datasetData ?? {}) as {
+    orders?: OrderRow[];
+    items?: OrderItemRow[];
+    bulk_orders?: BulkOrderRow[];
+    menu_items?: MenuMetadataRow[];
+  };
 
-  if (orderIds.length === 0) {
+  const orders = dataset.orders ?? [];
+  const orderItems = dataset.items ?? [];
+  const bulkData = dataset.bulk_orders ?? [];
+
+  if (orders.length === 0) {
     return {
       productionWeek,
       confirmedOrderCount: 0,
@@ -150,53 +159,9 @@ export async function getProductionSummary(
     };
   }
 
-  const [
-    { data: itemData, error: itemError },
-    { data: bulkData, error: bulkError },
-  ] = await Promise.all([
-    supabaseAdmin
-      .from("order_items")
-      .select("id, menu_item_id, item_name, item_sides, quantity")
-      .in("order_id", orderIds),
-    supabaseAdmin
-      .from("bulk_orders")
-      .select("bulk_order")
-      .in("order_id", orderIds),
-  ]);
-
-  if (itemError) {
-    throw new Error("Failed to load order items: " + itemError.message);
-  }
-
-  if (bulkError) {
-    throw new Error("Failed to load bulk orders: " + bulkError.message);
-  }
-
-  const orderItems = (itemData ?? []) as OrderItemRow[];
-  const menuItemIds = Array.from(
-    new Set(
-      orderItems
-        .map((item) => item.menu_item_id)
-        .filter((id): id is string => Boolean(id)),
-    ),
+  const metadata = new Map<string, MenuMetadataRow>(
+    (dataset.menu_items ?? []).map((row) => [row.id, row]),
   );
-
-  const metadata = new Map<string, MenuMetadataRow>();
-
-  if (menuItemIds.length > 0) {
-    const { data: metadataData, error: metadataError } = await supabaseAdmin
-      .from("menu_items_v2")
-      .select("id, short_name, menu_type, category, photo_path")
-      .in("id", menuItemIds);
-
-    if (metadataError) {
-      throw new Error("Failed to load menu metadata: " + metadataError.message);
-    }
-
-    for (const row of (metadataData ?? []) as MenuMetadataRow[]) {
-      metadata.set(row.id, row);
-    }
-  }
 
   const { data: sourceRows, error: sourceError } = await supabaseAdmin
     .from("production_item_sources")
