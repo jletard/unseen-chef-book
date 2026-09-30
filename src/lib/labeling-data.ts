@@ -11,6 +11,7 @@ type VersionItem = {
   item_kind: "ingredient" | "recipe";
   ingredient_id: string | null;
   dependency_recipe_version_id: string | null;
+  dependency_recipe_id: string | null;
   quantity: number;
   unit: string;
   sort_order: number;
@@ -116,22 +117,18 @@ export async function getLabelingWorkspace(): Promise<{
     ingredientComponentResult,
     massConversionResult,
     recipeResult,
-    versionResult,
-    itemResult,
     menuResult,
-    sourceResult,
-    linkResult,
+    sourceRecipeResult,
     legacyLinkResult,
   ] = await Promise.all([
     supabaseAdmin.from("ingredients").select("id, name, ingredient_kind, label_name, ingredient_statement, allergen_keys, allergen_details, dietary_flags, label_review_status, nutrition_reference_ingredient_id").is("retired_at", null).order("name"),
     supabaseAdmin.from("ingredient_components").select("id, parent_ingredient_id, child_ingredient_id, sort_order, source_text").order("parent_ingredient_id").order("sort_order").order("id"),
     supabaseAdmin.from("ingredient_mass_conversions").select("ingredient_id, quantity, unit, grams"),
     supabaseAdmin.from("recipes").select("id, name, recipe_type, current_approved_version_id").is("retired_at", null).not("current_approved_version_id", "is", null).order("name"),
-    supabaseAdmin.from("recipe_versions").select("id, recipe_id, base_yield, yield_kind, yield_unit").eq("state", "approved"),
-    supabaseAdmin.from("recipe_version_items").select("recipe_version_id, item_kind, ingredient_id, dependency_recipe_version_id, quantity, unit, sort_order").order("sort_order"),
     supabaseAdmin.from("menu_items_v2").select("id, name, short_name, sides").order("name"),
-    supabaseAdmin.from("production_item_sources").select("production_item_id, source_type, source_id, normalized_source_name").eq("mapping_state", "confirmed"),
-    supabaseAdmin.from("production_item_recipe_links").select("production_item_id, recipe_id").eq("role", "main").eq("active", true),
+    supabaseAdmin.rpc("get_production_source_recipe_map", {
+      p_source_types: ["menu_item", "side_item", "bulk_item"],
+    }),
     supabaseAdmin.from("menu_item_recipe_links").select("menu_item_id, recipe_id, role"),
   ]);
 
@@ -139,13 +136,25 @@ export async function getLabelingWorkspace(): Promise<{
     ?? ingredientComponentResult.error
     ?? massConversionResult.error
     ?? recipeResult.error
-    ?? versionResult.error
-    ?? itemResult.error
     ?? menuResult.error
-    ?? sourceResult.error
-    ?? linkResult.error
+    ?? sourceRecipeResult.error
     ?? legacyLinkResult.error;
   if (error) throw new Error(`Unable to load labeling workspace: ${error.message}`);
+
+  const currentRecipeIds = (recipeResult.data ?? []).map((row) => String(row.id));
+  const { data: graphData, error: graphError } = await supabaseAdmin.rpc(
+    "get_recipe_production_graph",
+    { p_recipe_ids: currentRecipeIds },
+  );
+
+  if (graphError) {
+    throw new Error(`Unable to load current approved labeling recipes: ${graphError.message}`);
+  }
+
+  const graph = (graphData ?? {}) as {
+    versions?: RecipeVersionRow[];
+    items?: VersionItem[];
+  };
 
   const ingredients: LabelIngredient[] = (ingredientResult.data ?? []).map((row) => ({
     id: String(row.id),
@@ -245,7 +254,7 @@ export async function getLabelingWorkspace(): Promise<{
     return { statement: compoundStatement(ingredient, contents), allergens, incomplete };
   }
 
-  const recipeVersions: RecipeVersionRow[] = (versionResult.data ?? []).map((row) => ({
+  const recipeVersions: RecipeVersionRow[] = (graph.versions ?? []).map((row) => ({
     id: String(row.id),
     recipe_id: String(row.recipe_id),
     base_yield: row.base_yield === null ? null : Number(row.base_yield),
@@ -256,12 +265,13 @@ export async function getLabelingWorkspace(): Promise<{
   const recipeByVersion = new Map(recipeVersions.map((row) => [String(row.id), String(row.recipe_id)]));
   const recipeNameById = new Map((recipeResult.data ?? []).map((row) => [String(row.id), String(row.name)]));
   const itemsByVersion = new Map<string, VersionItem[]>();
-  for (const raw of (itemResult.data ?? []) as VersionItem[]) {
+  for (const raw of graph.items ?? []) {
     const row: VersionItem = {
       recipe_version_id: String(raw.recipe_version_id),
       item_kind: raw.item_kind,
       ingredient_id: raw.ingredient_id ? String(raw.ingredient_id) : null,
       dependency_recipe_version_id: raw.dependency_recipe_version_id ? String(raw.dependency_recipe_version_id) : null,
+      dependency_recipe_id: raw.dependency_recipe_id ? String(raw.dependency_recipe_id) : null,
       quantity: Number(raw.quantity),
       unit: String(raw.unit),
       sort_order: Number(raw.sort_order),
