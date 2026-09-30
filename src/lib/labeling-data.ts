@@ -40,6 +40,13 @@ type MassConversionRow = {
   grams: number;
 };
 
+type SourceRecipeRow = {
+  source_type: string;
+  source_id: string;
+  normalized_source_name: string | null;
+  recipe_id: string;
+};
+
 type ResolvedLabelPart = {
   statement: string;
   allergens: Set<string>;
@@ -435,23 +442,19 @@ export async function getLabelingWorkspace(): Promise<{
 
   const recipeLabelById = new Map(recipes.map((item) => [item.recipeId, item]));
   const recipeLabelByName = new Map(recipes.map((item) => [normalizeCookbookName(item.name), item]));
-  const recipeIdBySource = new Map(
-    (sourceRecipeResult.data ?? []).map((row: {
-      source_type: string;
-      source_id: string;
-      normalized_source_name: string | null;
-      recipe_id: string;
-    }) => [
-      `${String(row.source_type)}:${String(row.source_id)}`,
-      String(row.recipe_id),
+  const sourceRecipeRows = (sourceRecipeResult.data ?? []) as SourceRecipeRow[];
+  const recipeIdBySource = new Map<string, string>(
+    sourceRecipeRows.map((row) => [
+      `${row.source_type}:${row.source_id}`,
+      row.recipe_id,
     ]),
   );
-  const recipeIdBySourceName = new Map(
-    (sourceRecipeResult.data ?? [])
-      .filter((row: { normalized_source_name?: string | null }) => row.normalized_source_name)
-      .map((row: { normalized_source_name: string; recipe_id: string }) => [
+  const recipeIdBySourceName = new Map<string, string>(
+    sourceRecipeRows
+      .filter((row) => Boolean(row.normalized_source_name))
+      .map((row) => [
         String(row.normalized_source_name),
-        String(row.recipe_id),
+        row.recipe_id,
       ]),
   );
   const legacyRecipeIdByMenuId = new Map(
