@@ -262,8 +262,13 @@ export async function getLabelingWorkspace(): Promise<{
     yield_unit: row.yield_unit ? String(row.yield_unit) : null,
   }));
   const versionById = new Map(recipeVersions.map((row) => [String(row.id), row]));
-  const recipeByVersion = new Map(recipeVersions.map((row) => [String(row.id), String(row.recipe_id)]));
   const recipeNameById = new Map((recipeResult.data ?? []).map((row) => [String(row.id), String(row.name)]));
+  const currentVersionByRecipe = new Map(
+    (recipeResult.data ?? []).map((row) => [
+      String(row.id),
+      String(row.current_approved_version_id),
+    ]),
+  );
   const itemsByVersion = new Map<string, VersionItem[]>();
   for (const raw of graph.items ?? []) {
     const row: VersionItem = {
@@ -298,9 +303,15 @@ export async function getLabelingWorkspace(): Promise<{
     return null;
   }
 
+  function currentDependencyVersionId(item: VersionItem) {
+    if (!item.dependency_recipe_id) return null;
+    return currentVersionByRecipe.get(item.dependency_recipe_id) ?? null;
+  }
+
   function scaleForRequestedComponent(item: VersionItem) {
-    if (!item.dependency_recipe_version_id) return null;
-    const childVersion = versionById.get(item.dependency_recipe_version_id);
+    const dependencyVersionId = currentDependencyVersionId(item);
+    if (!dependencyVersionId) return null;
+    const childVersion = versionById.get(dependencyVersionId);
     if (!childVersion || childVersion.base_yield === null || !childVersion.yield_unit || childVersion.base_yield <= 0) return null;
 
     const baseYield = Number(childVersion.base_yield);
@@ -337,8 +348,11 @@ export async function getLabelingWorkspace(): Promise<{
       let grams: number | null = null;
       if (item.item_kind === "ingredient" && item.ingredient_id) {
         grams = gramsForIngredient(item.ingredient_id, item.quantity, item.unit);
-      } else if (item.item_kind === "recipe" && item.dependency_recipe_version_id) {
-        const childBatchWeight = formulationWeightForVersion(item.dependency_recipe_version_id, nextVisited);
+      } else if (item.item_kind === "recipe") {
+        const dependencyVersionId = currentDependencyVersionId(item);
+        const childBatchWeight = dependencyVersionId
+          ? formulationWeightForVersion(dependencyVersionId, nextVisited)
+          : null;
         const scale = scaleForRequestedComponent(item);
         grams = childBatchWeight !== null && scale !== null ? childBatchWeight * scale : null;
       }
@@ -356,8 +370,11 @@ export async function getLabelingWorkspace(): Promise<{
     if (item.item_kind === "ingredient" && item.ingredient_id) {
       return gramsForIngredient(item.ingredient_id, item.quantity, item.unit);
     }
-    if (item.item_kind === "recipe" && item.dependency_recipe_version_id) {
-      const childWeight = formulationWeightForVersion(item.dependency_recipe_version_id);
+    if (item.item_kind === "recipe") {
+      const dependencyVersionId = currentDependencyVersionId(item);
+      const childWeight = dependencyVersionId
+        ? formulationWeightForVersion(dependencyVersionId)
+        : null;
       const scale = scaleForRequestedComponent(item);
       return childWeight !== null && scale !== null ? childWeight * scale : null;
     }
@@ -390,10 +407,12 @@ export async function getLabelingWorkspace(): Promise<{
         statements.push(resolvedIngredient.statement);
         resolvedIngredient.allergens.forEach((value) => allergens.add(value));
         resolvedIngredient.incomplete.forEach((value) => incomplete.add(value));
-      } else if (item.item_kind === "recipe" && item.dependency_recipe_version_id) {
-        const child = resolveVersion(item.dependency_recipe_version_id, nextVisited);
-        const childRecipeId = recipeByVersion.get(item.dependency_recipe_version_id);
-        const childName = childRecipeId ? recipeNameById.get(childRecipeId) : undefined;
+      } else if (item.item_kind === "recipe" && item.dependency_recipe_id) {
+        const childVersionId = currentDependencyVersionId(item);
+        const child = childVersionId
+          ? resolveVersion(childVersionId, nextVisited)
+          : { statements: [], allergens: new Set<string>(), incomplete: new Set<string>(["Prepared component: no current approved version"]) };
+        const childName = recipeNameById.get(item.dependency_recipe_id);
         statements.push(childName && child.statements.length ? `${childName} (${child.statements.join(", ")})` : childName || "Prepared component");
         child.allergens.forEach((value) => allergens.add(value));
         child.incomplete.forEach((value) => incomplete.add(value));
@@ -416,16 +435,24 @@ export async function getLabelingWorkspace(): Promise<{
 
   const recipeLabelById = new Map(recipes.map((item) => [item.recipeId, item]));
   const recipeLabelByName = new Map(recipes.map((item) => [normalizeCookbookName(item.name), item]));
-  const productionItemByMenuId = new Map(
-    (sourceResult.data ?? [])
-      .filter((row) => row.source_type === "menu_item" && row.source_id)
-      .map((row) => [String(row.source_id), String(row.production_item_id)]),
+  const recipeIdBySource = new Map(
+    (sourceRecipeResult.data ?? []).map((row: {
+      source_type: string;
+      source_id: string;
+      normalized_source_name: string | null;
+      recipe_id: string;
+    }) => [
+      `${String(row.source_type)}:${String(row.source_id)}`,
+      String(row.recipe_id),
+    ]),
   );
-  const productionItemBySourceName = new Map(
-    (sourceResult.data ?? []).map((row) => [String(row.normalized_source_name), String(row.production_item_id)]),
-  );
-  const recipeIdByProductionItem = new Map(
-    (linkResult.data ?? []).map((row) => [String(row.production_item_id), String(row.recipe_id)]),
+  const recipeIdBySourceName = new Map(
+    (sourceRecipeResult.data ?? [])
+      .filter((row: { normalized_source_name?: string | null }) => row.normalized_source_name)
+      .map((row: { normalized_source_name: string; recipe_id: string }) => [
+        String(row.normalized_source_name),
+        String(row.recipe_id),
+      ]),
   );
   const legacyRecipeIdByMenuId = new Map(
     (legacyLinkResult.data ?? [])
@@ -436,8 +463,7 @@ export async function getLabelingWorkspace(): Promise<{
   const menuLinkedRecipeIds = new Set<string>();
 
   for (const menu of menuResult.data ?? []) {
-    const productionItemId = productionItemByMenuId.get(String(menu.id));
-    const linkedRecipeId = (productionItemId ? recipeIdByProductionItem.get(productionItemId) : undefined)
+    const linkedRecipeId = recipeIdBySource.get(`menu_item:${String(menu.id)}`)
       ?? legacyRecipeIdByMenuId.get(String(menu.id));
     const mainRecipe = (linkedRecipeId ? recipeLabelById.get(linkedRecipeId) : undefined)
       ?? recipeLabelByName.get(normalizeCookbookName(String(menu.name)))
@@ -455,8 +481,7 @@ export async function getLabelingWorkspace(): Promise<{
       if (optionNames.length > 1) {
         const options = optionNames.map((optionName) => {
           const normalizedOptionName = normalizeCookbookName(optionName);
-          const optionProductionItemId = productionItemBySourceName.get(normalizedOptionName);
-          const optionRecipeId = optionProductionItemId ? recipeIdByProductionItem.get(optionProductionItemId) : undefined;
+          const optionRecipeId = recipeIdBySourceName.get(normalizedOptionName);
           return (optionRecipeId ? recipeLabelById.get(optionRecipeId) : undefined)
             ?? recipeLabelByName.get(normalizedOptionName);
         });
@@ -466,8 +491,7 @@ export async function getLabelingWorkspace(): Promise<{
         }
       }
       const normalizedSideName = normalizeCookbookName(sideName);
-      const sideProductionItemId = productionItemBySourceName.get(normalizedSideName);
-      const sideRecipeId = sideProductionItemId ? recipeIdByProductionItem.get(sideProductionItemId) : undefined;
+      const sideRecipeId = recipeIdBySourceName.get(normalizedSideName);
       const side = (sideRecipeId ? recipeLabelById.get(sideRecipeId) : undefined)
         ?? recipeLabelByName.get(normalizedSideName);
       if (!side) {
